@@ -349,6 +349,23 @@ async function submit(body: Body): Promise<Row> {
   };
 }
 
+/**
+ * Called a few times a second during a race: reports how far this athlete
+ * has run and returns everyone's progress, so clients can draw each other.
+ * Progress is display only. Places and times come from submitted logs.
+ */
+async function tick(body: Body): Promise<Row> {
+  const me = await auth(body);
+  const raceId = str(body, 'raceId');
+  const pos = Math.max(0, Math.min(2000, Math.floor(Number(body['pos']) || 0)));
+  await sql`
+    update typlympics.race_entries set progress = greatest(progress, ${pos})
+    where race_id = ${raceId} and athlete_id = ${me.id} and status = 'racing'`;
+  const rows: Row[] = await sql`
+    select athlete_id as id, progress, status, time_ms from typlympics.race_entries where race_id = ${raceId}`;
+  return { positions: rows.map((r) => ({ id: r.id, pos: r.progress, status: r.status, timeMs: r.time_ms })) };
+}
+
 async function results(body: Body): Promise<Row> {
   await auth(body);
   const raceId = str(body, 'raceId');
@@ -412,7 +429,7 @@ async function records(): Promise<Row> {
 
 // ------------------------------------------------------------ entry point
 
-const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, submit, results, records };
+const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, tick, submit, results, records };
 
 function reply(status: number, data: unknown): Response {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
