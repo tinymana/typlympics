@@ -1,0 +1,18 @@
+# Read by Cloudflare Pages and Netlify. GitHub Pages ignores this file.
+# Game code has content hashes in its file names: cache it for a year.
+/play/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Pages and dev notes: always check for a newer version.
+/*.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/play/
+  Cache-Control: no-cache
+/devnotes.json
+  Cache-Control: no-cache
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

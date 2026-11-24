@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check": "pnpm typecheck && pnpm test && pnpm build",
-    "smoke": "pnpm build && node tools/smoke.mjs smoke-out"
+    "smoke": "pnpm build && node tools/smoke.mjs smoke-out",
+    "site": "pnpm build && node tools/build-site.mjs",
+    "site:serve": "pnpm site && python3 -m http.server 4180 -d _site"
   },
   "devDependencies": {
     "@types/node": "^26.6.7",

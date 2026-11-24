@@ -155,7 +155,15 @@ const POSES: Record<string, Pose> = {
   run3: { hip: [11, 19], torso: 16, legs: [[-6, -72], [30, 8]], arms: [[16, 96], [-22, 58]] },
   stumble: { hip: [11, 20], torso: 58, legs: [[44, 22], [-42, -66]], arms: [[84, 104], [62, 92]] },
   win: { hip: [11, 19], torso: -4, legs: [[6, 0], [-6, 0]], arms: [[164, 178], [-164, -178]] },
+  // Finish dip: chest thrown at the line, arms swept back.
+  dip: { hip: [10, 19], torso: 56, legs: [[38, 12], [-34, -82]], arms: [[-72, -58], [-62, -48]] },
 };
+
+// Drive phase out of the blocks: the run cycle with a low, forward torso.
+for (let i = 0; i < 4; i++) {
+  const run = POSES[`run${i}`] as Pose;
+  POSES[`drv${i}`] = { ...run, hip: [10, 20], torso: 46 };
+}
 
 export const ATHLETE_FRAMES = Object.keys(POSES);
 export const ATHLETE_W = 24;

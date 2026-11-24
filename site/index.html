@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TYPLYMPICS: arcade keyboard athletics</title>
+    <meta name="description" content="An arcade track meet you run with your keyboard. Type fast, type clean, beat your best. Play free in your browser." />
+    <meta property="og:title" content="TYPLYMPICS" />
+    <meta property="og:description" content="An arcade track meet you run with your keyboard. Play free in your browser." />
+    <meta name="theme-color" content="#1a0b2e" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="apple-touch-icon" href="assets/icon-192.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <a class="nav-logo" href="#top" aria-label="Typlympics home"><span class="logo"><span class="logo-a">TYP</span><span class="logo-b">LYMPICS</span></span></a>
+      <nav>
+        <a href="#features">The game</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#notes">Dev notes</a>
+        <a class="btn small" href="play/">Play now</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <img class="hero-art" src="assets/title_screen.webp" width="960" height="540" alt="Typlympics start screen: five keyboard athletes at their keyboards in a stadium at sunset, under the Typlympics crest" />
+        <div class="hero-cta">
+          <a class="btn big" href="play/">&#9654; Play now</a>
+          <button class="btn big alt" id="play-here">Play here</button>
+          <p class="hero-sub">Free in your browser &middot; Needs a physical keyboard &middot; Your best time saves on your device</p>
+          <p class="hero-version" id="latest-version"></p>
+        </div>
+      </section>
+
+      <section id="play" class="panel game-panel" hidden>
+        <div class="game-bar">
+          <strong>Typlympics</strong>
+          <span class="spacer"></span>
+          <button class="btn small" id="fullscreen">&#9974; Full screen</button>
+          <a class="btn small alt" href="play/">Open on its own page</a>
+          <button class="btn small alt" id="close-game">&#10005; Close</button>
+        </div>
+        <div class="game-frame"></div>
+        <p class="fineprint">Tip: click the game once so it can hear your keyboard. Enter starts a race, Enter or Tab races again.</p>
+      </section>
+
+      <section id="features" class="features">
+        <h2 class="section-title">The world's greatest keyboard athletes</h2>
+        <div class="feature-grid">
+          <article class="panel feature">
+            <img src="assets/shot_race.webp" width="960" height="540" alt="An athlete mid-sprint with speed lines, the text to type shown below the track" loading="lazy" />
+            <h3>Your keyboard is the controller</h3>
+            <p>One correct key is one metre. Type 120 words a minute and you run the 100m in about ten seconds. A wrong key and your athlete stumbles.</p>
+          </article>
+          <article class="panel feature">
+            <img src="assets/shot_result.webp" width="960" height="540" alt="Result panel showing a new personal best with splits, reaction time, words per minute and accuracy" loading="lazy" />
+            <h3>One more race</h3>
+            <p>Every finish shows how far you were from your best, with splits, reaction time, words per minute and accuracy. One key starts the next race.</p>
+          </article>
+          <article class="panel feature">
+            <img src="assets/shot_ghost.webp" width="960" height="540" alt="The player's athlete racing a translucent ghost of their personal best" loading="lazy" />
+            <h3>Race your own ghost</h3>
+            <p>Your best run lines up in the next lane, replayed key for key. Finish within a tenth of a second of it and it goes to a photo finish.</p>
+          </article>
+          <article class="panel feature">
+            <img src="assets/shot_false_start.webp" width="960" height="540" alt="A false start called before the gun" loading="lazy" />
+            <h3>Wait for the gun</h3>
+            <p>The gun fires after a random pause. Jump it, or react faster than a human can, and you lose time out of the blocks.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="roadmap" class="roadmap">
+        <h2 class="section-title">Roadmap</h2>
+        <p class="notes-sub">Where the build is and what comes next.</p>
+        <ol class="road panel">
+          <li class="done"><span class="road-state">Done</span><div><h3>100m sprint</h3><p>Single-player sprint with a start sequence, results, a saved personal best and athlete sign-in.</p></div></li>
+          <li class="now"><span class="road-state">Now</span><div><h3>Measurement and animation</h3><p>Timing checks, five keyboard layouts, drive phase, finish dip and photo finish.</p></div></li>
+          <li><span class="road-state">Next</span><div><h3>Career page and the 200m</h3><p>Your stats in one place: times, words per minute, accuracy and race history.</p></div></li>
+          <li><span class="road-state">Later</span><div><h3>Live races</h3><p>Eight lanes, synchronised starts, private rooms and results computed by the server.</p></div></li>
+          <li><span class="road-state">Later</span><div><h3>Accounts and weekly medals</h3><p>A leaderboard for each event. The top three each week take gold, silver and bronze, kept in an all-time record by month and year.</p></div></li>
+          <li><span class="road-state">Later</span><div><h3>400m, 800m and 1500m</h3><p>Five track events in all, from pure burst to three minutes of endurance.</p></div></li>
+        </ol>
+      </section>
+
+      <section id="notes" class="notes">
+        <h2 class="section-title">Dev notes</h2>
+        <p class="notes-sub">What changed, newest first.</p>
+        <div id="notes-list" class="notes-list"><p class="fineprint">Loading&hellip;</p></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Typlympics is an original game by Tiny Mana Studios. It is not affiliated with or endorsed by the International Olympic Committee or any Olympic organisation.</p>
+      <p>Prototype build. Art and sound are placeholders.</p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>

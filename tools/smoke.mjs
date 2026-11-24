@@ -40,7 +40,41 @@ try {
     if (m.type() === 'error') errors.push(m.text());
   });
   await page.goto(`http://localhost:${PORT}/`);
-  await page.waitForFunction(() => window.__typlympics?.scene?.isActive('title'));
+
+  // Sign-in: a new athlete with a test PIN, then sign out and back in.
+  const scene = (key) => page.waitForFunction((k) => window.__typlympics?.scene?.isActive(k), key, { timeout: 8000 });
+  const typeText = async (text) => {
+    for (const ch of text) await page.keyboard.press(ch === ' ' ? 'Space' : ch);
+  };
+  const TEST_PIN = '4821';
+  await scene('login');
+  await sleep(300);
+  await typeText('smoke test');
+  await page.keyboard.press('Enter');
+  await typeText('jam');
+  await sleep(150);
+  await page.screenshot({ path: join(outDir, '0-sign-in.png') });
+  await page.keyboard.press('Enter');
+  await typeText(TEST_PIN);
+  await page.keyboard.press('Enter');
+  await scene('title');
+  const afterCreate = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')));
+  check('sign-in creates an athlete with name and nationality', afterCreate.activeProfileId === 'smoke-test' && afterCreate.profiles['smoke-test'].nationality === 'JAM');
+  check('the PIN is not stored in the save', !JSON.stringify(afterCreate).includes(TEST_PIN));
+
+  await page.keyboard.press('Escape');
+  await scene('login');
+  await typeText('smoke test');
+  await page.keyboard.press('Enter');
+  await typeText('0000');
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  check('a wrong PIN does not sign in', await page.evaluate(() => window.__typlympics.scene.isActive('login')));
+  await page.screenshot({ path: join(outDir, '0-wrong-pin.png') });
+  await typeText(TEST_PIN);
+  await page.keyboard.press('Enter');
+  await scene('title');
+  check('the right PIN signs back in', true);
   await sleep(400);
   await page.screenshot({ path: join(outDir, '1-title.png') });
 
@@ -113,8 +147,9 @@ try {
   // Persistence across a reload.
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')));
   const best = Math.min(r1.timeMs, r3.timeMs);
-  check('save has version 1 and the best time with its log', stored.saveVersion === 1 && stored.records['100m@1'].timeMs === best && stored.records['100m@1'].log.length >= 100);
-  check('save counts races', stored.totals.races === 3 && stored.totals.finishes === 3, JSON.stringify(stored.totals));
+  const me = stored.profiles['smoke-test'];
+  check('save has version 2 and the athlete\'s best time with its log', stored.saveVersion === 2 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
+  check('save counts races', me.totals.races === 3 && me.totals.finishes === 3, JSON.stringify(me.totals));
   await page.reload();
   await page.waitForFunction(() => window.__typlympics?.scene?.isActive('title'));
   await sleep(300);
@@ -125,6 +160,34 @@ try {
   await waitPhase('race');
   const fps = await page.evaluate(() => window.__typlympics.loop.actualFps);
   check('frame rate is near 60', fps > 50, `${fps.toFixed(1)} fps`);
+
+  // Measurement: held-key repeats and paste never count, and logged times
+  // match the browser's event timestamps to the millisecond.
+  const m = await page.evaluate(async () => {
+    const s = window.__typlympics.scene.getScene('race');
+    const text = s.line.text;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    await wait(160);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: text[0], repeat: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: text[0], isComposing: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: text[0], ctrlKey: true, cancelable: true }));
+    const paste = new Event('paste', { cancelable: true });
+    window.dispatchEvent(paste);
+    const posAfterIgnored = s.sim.pos;
+    const samples = [];
+    for (let i = 0; i < 20; i++) {
+      await wait(31 + (i % 5) * 7);
+      const ev = new KeyboardEvent('keydown', { key: text[i], cancelable: true });
+      const expected = Math.round(ev.timeStamp - s.gunAt);
+      window.dispatchEvent(ev);
+      samples.push(Math.abs(s.log[s.log.length - 1].t - expected));
+    }
+    return { posAfterIgnored, pastePrevented: paste.defaultPrevented, worst: Math.max(...samples), pos: s.sim.pos };
+  });
+  check('repeat, composition, chord and paste input do not advance the athlete', m.posAfterIgnored === 0 && m.pastePrevented);
+  check('logged key times are within 1 ms of the event timestamps', m.worst <= 1 && m.pos === 20, `worst ${m.worst} ms`);
+  await sleep(250);
+  await page.screenshot({ path: join(outDir, '8-drive-phase.png') });
 
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   void startRematch;

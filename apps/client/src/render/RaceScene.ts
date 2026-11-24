@@ -17,13 +17,15 @@ import {
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import {
+  activeProfile,
   browserStore,
   loadSave,
   packLog,
   persistSave,
   verifyRecord,
   type KeyValueStore,
-  type SaveV1,
+  type Profile,
+  type Save,
 } from '../storage/save';
 import {
   COLORS,
@@ -52,6 +54,15 @@ const MARKS_MS = 1500;
 const GUN_DELAY_MIN_MS = 1000;
 const GUN_DELAY_MAX_MS = 2500;
 const RUN_FRAMES = ['ath_run0', 'ath_run1', 'ath_run2', 'ath_run3'] as const;
+const DRIVE_FRAMES = ['ath_drv0', 'ath_drv1', 'ath_drv2', 'ath_drv3'] as const;
+/** Metres run with a low torso after the start. */
+const DRIVE_METRES = 5;
+const DIP_MS = 240;
+/** A finish this close to the personal best is announced as a photo finish. */
+const PHOTO_FINISH_MS = 100;
+/** Clean keys in a row before speed lines appear. Presentation only (D11). */
+const STREAK_START = 15;
+const STREAK_FULL = 45;
 const CELL_W = 17;
 const LINE_Y = [484, 516] as const;
 
@@ -93,7 +104,8 @@ function randomSeed(): string {
 export class RaceScene extends Phaser.Scene {
   private readonly ruleset = SPRINT_100M_V1;
   private store: KeyValueStore | null = null;
-  private save!: SaveV1;
+  private save!: Save;
+  private profile!: Profile;
   private sfx!: Sfx;
   private detach: (() => void) | null = null;
 
@@ -110,6 +122,11 @@ export class RaceScene extends Phaser.Scene {
   private result: SprintResult | null = null;
   private pbTimeMs: number | null = null;
   private pbTimes: readonly number[] | null = null;
+  private finishedAt = 0;
+  private streak = 0;
+  private dust: Phaser.GameObjects.Rectangle[] = [];
+  private dustNext = 0;
+  private speedLines: Phaser.GameObjects.Rectangle[] = [];
 
   // Display objects.
   private stands!: Phaser.GameObjects.TileSprite;
@@ -145,6 +162,16 @@ export class RaceScene extends Phaser.Scene {
     ensureTextures(this);
     this.store = browserStore();
     this.save = loadSave(this.store);
+    const profile = activeProfile(this.save);
+    if (!profile) {
+      this.scene.start('login');
+      return;
+    }
+    this.profile = profile;
+    // Display objects are rebuilt each time the scene starts.
+    this.chars = [];
+    this.dust = [];
+    this.speedLines = [];
     this.sfx = new Sfx(this.save.settings.volume);
     this.sfx.unlock();
 
@@ -156,6 +183,7 @@ export class RaceScene extends Phaser.Scene {
       .text(0, 0, 'PB', { fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: COLORS.ice })
       .setOrigin(0.5, 1)
       .setDepth(20 + GHOST_LANE);
+    this.buildEffects();
     this.buildHud();
     this.buildPanel();
 
@@ -211,6 +239,33 @@ export class RaceScene extends Phaser.Scene {
     return { sprite, shadow, x: START_X, runPhase: 0, frame: 'ath_marks' };
   }
 
+  private buildEffects(): void {
+    for (let i = 0; i < 12; i++) {
+      this.dust.push(this.add.rectangle(0, 0, 4, 4, 0xf4d6e6).setDepth(15 + PLAYER_LANE).setVisible(false));
+    }
+    for (let i = 0; i < 7; i++) {
+      const y = TRACK_TOP - 30 + i * 28;
+      this.speedLines.push(
+        this.add
+          .rectangle((i * 173) % GAME_W, y, 90 + (i % 3) * 40, 2, 0xffffff)
+          .setOrigin(0, 0.5)
+          .setScrollFactor(0)
+          .setDepth(40)
+          .setAlpha(0),
+      );
+    }
+  }
+
+  private puffDust(): void {
+    const d = this.dust[this.dustNext] as Phaser.GameObjects.Rectangle;
+    this.dustNext = (this.dustNext + 1) % this.dust.length;
+    const x = this.player.sprite.x - 14;
+    const y = laneFeetY(PLAYER_LANE) - 3;
+    this.tweens.killTweensOf(d);
+    d.setPosition(x, y).setAlpha(0.75).setScale(1).setVisible(true);
+    this.tweens.add({ targets: d, x: x - 16, y: y - 8, alpha: 0, scale: 1.8, duration: 280 });
+  }
+
   private buildHud(): void {
     const fixed = <T extends Phaser.GameObjects.GameObject & { setScrollFactor(x: number): T; setDepth(d: number): T }>(o: T): T =>
       o.setScrollFactor(0).setDepth(60);
@@ -232,7 +287,7 @@ export class RaceScene extends Phaser.Scene {
     fixed(this.add.rectangle(0, 0, GAME_W, 52, 0x120824, 0.82).setOrigin(0));
     fixed(this.add.rectangle(0, 52, GAME_W, 2, 0xffd23f).setOrigin(0));
     fixed(
-      this.add.text(16, 26, '100M SPRINT', { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
+      this.add.text(16, 26, `100M  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
     );
     this.timerText = fixed(
       this.add.text(GAME_W / 2, 27, '0.00', { fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLORS.white }).setOrigin(0.5),
@@ -290,7 +345,7 @@ export class RaceScene extends Phaser.Scene {
   // ------------------------------------------------------------ race flow
 
   private beginRace(): void {
-    const rec = this.save.records[this.ruleset.id];
+    const rec = this.profile.records[this.ruleset.id];
     const times = rec ? verifyRecord(this.ruleset, rec) : null;
     this.pbTimes = times;
     this.pbTimeMs = rec && times ? rec.timeMs : null;
@@ -301,6 +356,7 @@ export class RaceScene extends Phaser.Scene {
     this.preGun = [];
     this.result = null;
     this.stumbleUntil = 0;
+    this.streak = 0;
     this.phase = 'marks';
     this.phaseAt = performance.now();
 
@@ -333,7 +389,7 @@ export class RaceScene extends Phaser.Scene {
     this.phase = 'race';
     this.sfx.gun();
     this.cameras.main.flash(90, 255, 255, 255);
-    this.save.totals.races += 1;
+    this.profile.totals.races += 1;
     persistSave(this.store, this.save);
 
     // Keys pressed before the gun enter the log with negative times.
@@ -377,6 +433,8 @@ export class RaceScene extends Phaser.Scene {
     switch (kind) {
       case 'advance':
         this.sfx.step();
+        this.streak += 1;
+        this.puffDust();
         break;
       case 'finish':
         this.sfx.step();
@@ -384,6 +442,7 @@ export class RaceScene extends Phaser.Scene {
         break;
       case 'error':
         this.sfx.error();
+        this.streak = 0;
         this.stumbleUntil = this.gunAt + this.sim.lockedUntil;
         this.cameras.main.shake(110, 0.004);
         break;
@@ -405,11 +464,12 @@ export class RaceScene extends Phaser.Scene {
       else this.beginRace();
       return;
     }
-    if (this.phase === 'result') this.beginRace();
+    if (this.phase === 'result' && (key === 'Enter' || key === 'Tab')) this.beginRace();
   }
 
   private finishRace(): void {
     this.phase = 'result';
+    this.finishedAt = performance.now();
     // The official result is recomputed from the log, exactly as a ranked
     // server will do. The live state is only ever a preview of it.
     const official = simulate(this.ruleset, this.line.text, this.log);
@@ -418,9 +478,9 @@ export class RaceScene extends Phaser.Scene {
 
     const previous = this.pbTimeMs;
     const isRecord = previous === null || timeMs < previous;
-    this.save.totals.finishes += 1;
+    this.profile.totals.finishes += 1;
     if (isRecord) {
-      this.save.records[this.ruleset.id] = {
+      this.profile.records[this.ruleset.id] = {
         rulesetId: this.ruleset.id,
         timeMs,
         seed: this.line.seed,
@@ -434,11 +494,17 @@ export class RaceScene extends Phaser.Scene {
     this.timerText.setText(formatTime(timeMs)).setColor(COLORS.gold);
     this.metresText.setText('100 m');
     if (isRecord) this.pbText.setText(`PB ${formatTime(timeMs)}`);
-    this.banner.setVisible(false);
+    const photo = previous !== null && Math.abs(timeMs - previous) < PHOTO_FINISH_MS;
+    if (photo) {
+      this.showBanner('PHOTO FINISH', COLORS.ice, 900);
+      this.cameras.main.flash(160, 255, 255, 255);
+    } else {
+      this.banner.setVisible(false);
+    }
     if (isRecord) this.sfx.record();
     else this.sfx.finish();
     this.fillPanel(official, previous, isRecord);
-    this.time.delayedCall(380, () => {
+    this.time.delayedCall(photo ? 1100 : 380, () => {
       if (this.phase === 'result' && this.result === official) this.panel.setVisible(true);
     });
   }
@@ -455,7 +521,12 @@ export class RaceScene extends Phaser.Scene {
       p.delta.setText('FIRST TIME ON THE BOARD').setColor(COLORS.ice);
     } else {
       const d = timeMs - previousPb;
-      p.delta.setText(d < 0 ? `${signed(d)}  FASTER THAN YOUR BEST` : `${signed(d)}  OFF YOUR BEST`);
+      const margin = `${(Math.abs(d) / 1000).toFixed(3)} s`;
+      if (Math.abs(d) < PHOTO_FINISH_MS) {
+        p.delta.setText(d < 0 ? `PHOTO FINISH: ${margin} AHEAD OF YOUR BEST` : d === 0 ? 'PHOTO FINISH: DEAD HEAT WITH YOUR BEST' : `PHOTO FINISH: ${margin} BEHIND YOUR BEST`);
+      } else {
+        p.delta.setText(d < 0 ? `${signed(d)}  FASTER THAN YOUR BEST` : `${signed(d)}  OFF YOUR BEST`);
+      }
       p.delta.setColor(d < 0 ? COLORS.green : COLORS.red);
     }
 
@@ -585,7 +656,8 @@ export class RaceScene extends Phaser.Scene {
     if (this.phase === 'marks') frame = 'ath_marks';
     else if (this.phase === 'set') frame = 'ath_set';
     else if (stumbling) frame = 'ath_stumble';
-    else if (moved / dt > 30) frame = this.runFrame(this.player);
+    else if (finished && now - this.finishedAt < DIP_MS) frame = 'ath_dip';
+    else if (moved / dt > 30) frame = this.runFrame(this.player, !finished && this.sim.pos <= DRIVE_METRES);
     else if (finished) frame = 'ath_win';
     else frame = this.sim.pos === 0 ? 'ath_set' : 'ath_run1';
     this.setFrame(this.player, frame);
@@ -604,6 +676,17 @@ export class RaceScene extends Phaser.Scene {
       else gFrame = ghostDone ? 'ath_idle' : 'ath_run1';
       this.setFrame(this.ghost, gFrame);
       this.ghostTag.setPosition(this.ghost.sprite.x, this.ghost.sprite.y - 98);
+    }
+
+    // Speed lines for a clean streak. They never affect the race.
+    const intensity =
+      this.phase === 'race' ? Phaser.Math.Clamp((this.streak - STREAK_START) / (STREAK_FULL - STREAK_START), 0, 1) : 0;
+    for (const line of this.speedLines) {
+      line.setAlpha(intensity * 0.45);
+      if (intensity > 0) {
+        line.x -= dt * 1400;
+        if (line.x < -line.width) line.x = GAME_W + Math.random() * 200;
+      }
     }
 
     // Camera and parallax.
@@ -625,8 +708,9 @@ export class RaceScene extends Phaser.Scene {
     return moved;
   }
 
-  private runFrame(r: Runner): string {
-    return RUN_FRAMES[Math.floor(r.runPhase) % RUN_FRAMES.length] as string;
+  private runFrame(r: Runner, drive = false): string {
+    const frames = drive ? DRIVE_FRAMES : RUN_FRAMES;
+    return frames[Math.floor(r.runPhase) % frames.length] as string;
   }
 
   private setFrame(r: Runner, frame: string): void {

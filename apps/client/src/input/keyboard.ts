@@ -13,7 +13,26 @@ export interface KeyLike {
   readonly altKey?: boolean;
 }
 
-export type ControlKey = 'Enter' | 'Tab' | 'Escape';
+export type ControlKey =
+  | 'Enter'
+  | 'Tab'
+  | 'Escape'
+  | 'Backspace'
+  | 'ArrowLeft'
+  | 'ArrowRight'
+  | 'ArrowUp'
+  | 'ArrowDown';
+
+const CONTROL_KEYS: ReadonlySet<string> = new Set<ControlKey>([
+  'Enter',
+  'Tab',
+  'Escape',
+  'Backspace',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+]);
 
 export type Classified =
   | { kind: 'char'; ch: string }
@@ -29,9 +48,7 @@ export type Classified =
 export function classifyKey(e: KeyLike): Classified {
   if (e.repeat || e.isComposing) return { kind: 'ignore' };
   if (e.ctrlKey || e.metaKey || e.altKey) return { kind: 'ignore' };
-  if (e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
-    return { kind: 'control', key: e.key };
-  }
+  if (CONTROL_KEYS.has(e.key)) return { kind: 'control', key: e.key as ControlKey };
   if (e.key.length === 1) return { kind: 'char', ch: e.key.toLowerCase() };
   return { kind: 'ignore' };
 }

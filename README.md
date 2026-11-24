@@ -11,12 +11,13 @@ pnpm install
 pnpm dev        # http://localhost:5173
 ```
 
+- Sign in first: type a name, pick a nationality, set a four-digit PIN. Type GUEST to skip the PIN. The PIN is a convenience lock for shared computers, not a secure password.
 - Enter starts a race. Type the line shown at the bottom of the screen.
 - One correct key is one metre. The 100th correct key stops the clock.
 - A wrong key is a stumble: input is ignored for 200 ms. There is no backspace.
 - A key before the gun, or within 100 ms of it, is a false start and costs 300 ms.
 - Enter or Tab on the result screen races again. Esc restarts a race, or returns to the title from the result.
-- Your best run is saved in the browser and runs beside you as a ghost.
+- Each athlete's best run is saved in the browser and runs beside them as a ghost.
 
 ## Commands
 
@@ -31,6 +32,14 @@ pnpm dev        # http://localhost:5173
 
 `pnpm smoke` needs Chrome or Chromium; set `CHROME_PATH` if it is not at `/usr/bin/google-chrome`.
 
+## Website and dev notes
+
+`site/` is the public landing page: a hero, "Play here" in the page, a feature tour, the roadmap and the dev notes. The game itself is served under `play/`.
+
+- **Add a dev note:** put a new entry at the top of `site/devnotes.json` (version, date, title, and items tagged `new`, `improved` or `fixed`). The page reads the file when it loads; nothing else needs editing.
+- **Preview locally:** `pnpm site:serve`, then open http://localhost:4180.
+- **Publish:** `.github/workflows/pages.yml` type-checks, tests, builds and publishes the site on every push to `main`. One-time setup: in the repository on GitHub, open Settings, then Pages, and set Source to "GitHub Actions". The site is then served at `https://<owner>.github.io/typlympics/`.
+
 ## Layout
 
 ```
@@ -41,7 +50,8 @@ apps/client        Phaser 4 + Vite game client.
   src/render       Scenes, generated textures, layout.
   src/audio        Synthesised sound effects.
   src/storage      Versioned local save with migrations.
-tools              Text difficulty analysis and the browser smoke test.
+site               Public landing page and dev notes (devnotes.json).
+tools              Text difficulty analysis, browser smoke test, site assembly.
 ```
 
 ## The one rule everything rests on
