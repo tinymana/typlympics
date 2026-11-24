@@ -17,13 +17,15 @@ import {
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import {
+  activeProfile,
   browserStore,
   loadSave,
   packLog,
   persistSave,
   verifyRecord,
   type KeyValueStore,
-  type SaveV1,
+  type Profile,
+  type Save,
 } from '../storage/save';
 import {
   COLORS,
@@ -102,7 +104,8 @@ function randomSeed(): string {
 export class RaceScene extends Phaser.Scene {
   private readonly ruleset = SPRINT_100M_V1;
   private store: KeyValueStore | null = null;
-  private save!: SaveV1;
+  private save!: Save;
+  private profile!: Profile;
   private sfx!: Sfx;
   private detach: (() => void) | null = null;
 
@@ -159,6 +162,16 @@ export class RaceScene extends Phaser.Scene {
     ensureTextures(this);
     this.store = browserStore();
     this.save = loadSave(this.store);
+    const profile = activeProfile(this.save);
+    if (!profile) {
+      this.scene.start('login');
+      return;
+    }
+    this.profile = profile;
+    // Display objects are rebuilt each time the scene starts.
+    this.chars = [];
+    this.dust = [];
+    this.speedLines = [];
     this.sfx = new Sfx(this.save.settings.volume);
     this.sfx.unlock();
 
@@ -274,7 +287,7 @@ export class RaceScene extends Phaser.Scene {
     fixed(this.add.rectangle(0, 0, GAME_W, 52, 0x120824, 0.82).setOrigin(0));
     fixed(this.add.rectangle(0, 52, GAME_W, 2, 0xffd23f).setOrigin(0));
     fixed(
-      this.add.text(16, 26, '100M SPRINT', { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
+      this.add.text(16, 26, `100M  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
     );
     this.timerText = fixed(
       this.add.text(GAME_W / 2, 27, '0.00', { fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLORS.white }).setOrigin(0.5),
@@ -332,7 +345,7 @@ export class RaceScene extends Phaser.Scene {
   // ------------------------------------------------------------ race flow
 
   private beginRace(): void {
-    const rec = this.save.records[this.ruleset.id];
+    const rec = this.profile.records[this.ruleset.id];
     const times = rec ? verifyRecord(this.ruleset, rec) : null;
     this.pbTimes = times;
     this.pbTimeMs = rec && times ? rec.timeMs : null;
@@ -376,7 +389,7 @@ export class RaceScene extends Phaser.Scene {
     this.phase = 'race';
     this.sfx.gun();
     this.cameras.main.flash(90, 255, 255, 255);
-    this.save.totals.races += 1;
+    this.profile.totals.races += 1;
     persistSave(this.store, this.save);
 
     // Keys pressed before the gun enter the log with negative times.
@@ -451,7 +464,7 @@ export class RaceScene extends Phaser.Scene {
       else this.beginRace();
       return;
     }
-    if (this.phase === 'result') this.beginRace();
+    if (this.phase === 'result' && (key === 'Enter' || key === 'Tab')) this.beginRace();
   }
 
   private finishRace(): void {
@@ -465,9 +478,9 @@ export class RaceScene extends Phaser.Scene {
 
     const previous = this.pbTimeMs;
     const isRecord = previous === null || timeMs < previous;
-    this.save.totals.finishes += 1;
+    this.profile.totals.finishes += 1;
     if (isRecord) {
-      this.save.records[this.ruleset.id] = {
+      this.profile.records[this.ruleset.id] = {
         rulesetId: this.ruleset.id,
         timeMs,
         seed: this.line.seed,

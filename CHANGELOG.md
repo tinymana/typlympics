@@ -5,6 +5,23 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (sign-in and start screen)
+
+- Athlete sign-in scene: name, nationality (70 countries, arrows or
+  type-ahead) and a four-digit PIN. A known name asks for its PIN; a new
+  name creates an athlete. Three wrong PINs return to the name step.
+- Save version 2: per-athlete profiles with their own records and totals,
+  an active profile, and a PIN-less GUEST. Version 1 saves migrate, with
+  their record moved to GUEST. The PIN is stored only as a salted hash.
+  This is a convenience lock for shared computers, not security; real
+  accounts come with the server in milestone 5.
+- Title screen now uses the creative director's start-screen art. The
+  five-ring emblem is covered by the art's own tagline strip. Menu rows
+  for unbuilt modes are dimmed.
+- Keyboard handling recognises Backspace and the arrow keys as controls.
+- 66 tests; the smoke test signs up, signs out, tries a wrong PIN and
+  signs back in.
+
 Milestone 2 work: typing measurement and athlete animation.
 
 ### Added

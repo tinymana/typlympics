@@ -65,7 +65,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 40px; }
 
 /* Hero */
 .hero { position: relative; border-radius: 14px; overflow: hidden; border: 4px solid var(--gold); box-shadow: 0 0 0 4px var(--ink), 0 12px 0 rgba(0, 0, 0, .35); }
-.hero-art { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; image-rendering: pixelated; }
+.hero-art { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .hero-cta {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 18px; padding: 18px;
   background: linear-gradient(180deg, var(--panel), var(--night)); border-top: 4px solid var(--ink);

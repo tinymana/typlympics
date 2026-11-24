@@ -11,12 +11,13 @@ pnpm install
 pnpm dev        # http://localhost:5173
 ```
 
+- Sign in first: type a name, pick a nationality, set a four-digit PIN. Type GUEST to skip the PIN. The PIN is a convenience lock for shared computers, not a secure password.
 - Enter starts a race. Type the line shown at the bottom of the screen.
 - One correct key is one metre. The 100th correct key stops the clock.
 - A wrong key is a stumble: input is ignored for 200 ms. There is no backspace.
 - A key before the gun, or within 100 ms of it, is a false start and costs 300 ms.
 - Enter or Tab on the result screen races again. Esc restarts a race, or returns to the title from the result.
-- Your best run is saved in the browser and runs beside you as a ghost.
+- Each athlete's best run is saved in the browser and runs beside them as a ghost.
 
 ## Commands
 

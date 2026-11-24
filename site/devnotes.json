@@ -2,12 +2,45 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.4",
+      "date": "2026-11-24",
+      "title": "Sign in and the real start screen",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Athlete sign-in, arcade style: enter your name, pick your nationality and set a four-digit PIN. Your record is waiting next time you type your name and PIN."
+        },
+        {
+          "tag": "new",
+          "text": "Several athletes can share one computer, each with their own best times. Type GUEST to play without a PIN."
+        },
+        {
+          "tag": "new",
+          "text": "The hand-made start screen is in the game and on this page. Menu rows for modes that are not built yet are dimmed."
+        },
+        {
+          "tag": "improved",
+          "text": "Your name and nationality show on the scoreboard during a race."
+        },
+        {
+          "tag": "improved",
+          "text": "Best times from earlier builds are kept under the GUEST athlete."
+        }
+      ]
+    },
+    {
       "version": "0.3",
       "date": "2026-11-24",
       "title": "A home on the web",
       "items": [
-        { "tag": "new", "text": "This website: play in the page or full screen, see what is coming, and read these notes." },
-        { "tag": "new", "text": "The game now publishes itself here every time the code is updated." }
+        {
+          "tag": "new",
+          "text": "This website: play in the page or full screen, see what is coming, and read these notes."
+        },
+        {
+          "tag": "new",
+          "text": "The game now publishes itself here every time the code is updated."
+        }
       ]
     },
     {
@@ -15,11 +48,26 @@
       "date": "2026-11-24",
       "title": "Out of the blocks",
       "items": [
-        { "tag": "new", "text": "Drive phase: your athlete stays low for the first five metres, then rises into full stride." },
-        { "tag": "new", "text": "Finish dip at the line, dust at your feet on every stride, and speed lines after 15 clean keys in a row." },
-        { "tag": "new", "text": "Photo finish: end within a tenth of a second of your best and the margin is shown to the millisecond." },
-        { "tag": "improved", "text": "Tested on QWERTY, Dvorak, Colemak, AZERTY and QWERTZ layouts. The game reads the character you type, not the physical key." },
-        { "tag": "improved", "text": "Held keys, paste and keyboard shortcuts can never move your athlete, and key times are checked to the millisecond." }
+        {
+          "tag": "new",
+          "text": "Drive phase: your athlete stays low for the first five metres, then rises into full stride."
+        },
+        {
+          "tag": "new",
+          "text": "Finish dip at the line, dust at your feet on every stride, and speed lines after 15 clean keys in a row."
+        },
+        {
+          "tag": "new",
+          "text": "Photo finish: end within a tenth of a second of your best and the margin is shown to the millisecond."
+        },
+        {
+          "tag": "improved",
+          "text": "Tested on QWERTY, Dvorak, Colemak, AZERTY and QWERTZ layouts. The game reads the character you type, not the physical key."
+        },
+        {
+          "tag": "improved",
+          "text": "Held keys, paste and keyboard shortcuts can never move your athlete, and key times are checked to the millisecond."
+        }
       ]
     },
     {
@@ -27,12 +75,30 @@
       "date": "2026-11-24",
       "title": "First race: the 100m sprint",
       "items": [
-        { "tag": "new", "text": "100m sprint: 100 characters, one metre each. The hundredth correct key stops the clock." },
-        { "tag": "new", "text": "Start sequence with a random gun delay and a false start rule." },
-        { "tag": "new", "text": "A wrong key makes you stumble for a fifth of a second. No backspace needed." },
-        { "tag": "new", "text": "Result screen with your time, the gap to your best, splits at 30, 60 and 100 metres, reaction time, words per minute and accuracy." },
-        { "tag": "new", "text": "Your best run is saved on your device and races beside you as a ghost." },
-        { "tag": "new", "text": "A fresh line of text every race, balanced so times on different lines are comparable." }
+        {
+          "tag": "new",
+          "text": "100m sprint: 100 characters, one metre each. The hundredth correct key stops the clock."
+        },
+        {
+          "tag": "new",
+          "text": "Start sequence with a random gun delay and a false start rule."
+        },
+        {
+          "tag": "new",
+          "text": "A wrong key makes you stumble for a fifth of a second. No backspace needed."
+        },
+        {
+          "tag": "new",
+          "text": "Result screen with your time, the gap to your best, splits at 30, 60 and 100 metres, reaction time, words per minute and accuracy."
+        },
+        {
+          "tag": "new",
+          "text": "Your best run is saved on your device and races beside you as a ghost."
+        },
+        {
+          "tag": "new",
+          "text": "A fresh line of text every race, balanced so times on different lines are comparable."
+        }
       ]
     }
   ]
