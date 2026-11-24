@@ -5,6 +5,19 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (five distances)
+
+- Rulesets `200m@1`, `400m@1`, `800m@1` and `1500m@1` on the sprint's
+  rules, with their own split marks and time standards; `RULESETS`,
+  `rulesetFor` and `eventLabel` in `@typlympics/sim`.
+- Text generator holds every line length to the same difficulty per metre.
+- Race scene works at any distance: track length, distance marks and
+  finish follow the ruleset, and the text band scrolls two lines at a time
+  (`render/textLines.ts`), repainting only the cells that change.
+- Train: all five distances open, each with its own best, ghost, rival
+  ladder and badge. Career page switches distance with left and right.
+- 91 tests; the smoke test also runs a 200m.
+
 ### Added (main menu and career)
 
 - Live main menu on the title screen: Train, Compete, Career, World

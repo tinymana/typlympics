@@ -9,7 +9,8 @@ import {
   type SprintLine,
 } from '@typlympics/content';
 import {
-  SPRINT_100M_V1,
+  eventLabel,
+  rulesetFor,
   applyInput,
   createSprint,
   formatTime,
@@ -19,6 +20,7 @@ import {
   type InputEvent,
   type Medal,
   type SprintResult,
+  type SprintRuleset,
   type SprintState,
   type StepKind,
 } from '@typlympics/sim';
@@ -40,7 +42,6 @@ import {
 } from '../storage/save';
 import {
   COLORS,
-  FINISH_X,
   FONT_DISPLAY,
   FONT_MONO,
   GAME_H,
@@ -54,11 +55,11 @@ import {
   STANDS_TOP,
   START_X,
   TRACK_TOP,
-  WORLD_W,
   laneFeetY,
 } from './layout';
 import { portraitKey, preloadPortraits } from './portraits';
 import { ensureTextures } from './textures';
+import { topLineFor, wrapLines, type TextLine } from './textLines';
 
 type Phase = 'marks' | 'set' | 'race' | 'result';
 
@@ -77,6 +78,16 @@ const STREAK_START = 15;
 const STREAK_FULL = 45;
 const CELL_W = 17;
 const LINE_Y = [484, 516] as const;
+/** Characters per row of the text band. */
+const LINE_MAX = 54;
+/** Paint state of one character cell, so a cell is only redrawn when it changes. */
+const enum Cell {
+  Empty,
+  Todo,
+  Next,
+  NextRed,
+  Done,
+}
 
 const MEDAL_LABEL: Record<Exclude<Medal, null>, string> = {
   worldClass: 'WORLD CLASS',
@@ -114,7 +125,9 @@ function randomSeed(): string {
  * pictures and sound; every rule lives in @typlympics/sim.
  */
 export class RaceScene extends Phaser.Scene {
-  private readonly ruleset = SPRINT_100M_V1;
+  private ruleset: SprintRuleset = rulesetFor('100m');
+  private finishX = 0;
+  private worldW = 0;
   private store: KeyValueStore | null = null;
   private save!: Save;
   private profile!: Profile;
@@ -153,7 +166,11 @@ export class RaceScene extends Phaser.Scene {
   private ghostTag!: Phaser.GameObjects.Text;
   private chars: Phaser.GameObjects.Text[] = [];
   private cursor!: Phaser.GameObjects.Rectangle;
-  private markedTo = 0;
+  /** Two rows of character cells; long races scroll through them line by line. */
+  private cells: Phaser.GameObjects.Text[][] = [];
+  private cellState: Cell[][] = [];
+  private lines: TextLine[] = [];
+  private topLine = -1;
   private nextRed = false;
   private timerText!: Phaser.GameObjects.Text;
   private metresText!: Phaser.GameObjects.Text;
@@ -177,8 +194,11 @@ export class RaceScene extends Phaser.Scene {
     super('race');
   }
 
-  init(data: { rival?: string | null }): void {
+  init(data: { event?: string | null; rival?: string | null }): void {
+    this.ruleset = rulesetFor(data?.event);
     this.rival = rivalById(data?.rival);
+    this.finishX = START_X + this.ruleset.distance * PX_PER_M;
+    this.worldW = this.finishX + 520;
   }
 
   preload(): void {
@@ -196,7 +216,8 @@ export class RaceScene extends Phaser.Scene {
     }
     this.profile = profile;
     // Display objects are rebuilt each time the scene starts.
-    this.chars = [];
+    this.cells = [];
+    this.cellState = [];
     this.dust = [];
     this.speedLines = [];
     this.sfx = new Sfx(this.save.settings.volume);
@@ -238,9 +259,11 @@ export class RaceScene extends Phaser.Scene {
     this.add.rectangle(0, HUD_TOP - 2, GAME_W, 2, 0xf4e9ff).setOrigin(0).setScrollFactor(0);
 
     const trackH = LANE_H * LANES;
-    // Start line and 10 m marks.
+    // Start line and distance marks: every 10 m in the sprints, every 50 m beyond.
+    const distance = this.ruleset.distance;
+    const markEvery = distance <= 200 ? 10 : 50;
     this.add.rectangle(START_X, TRACK_TOP, 4, trackH, 0xffffff).setOrigin(0.5, 0);
-    for (let m = 10; m < 100; m += 10) {
+    for (let m = markEvery; m < distance; m += markEvery) {
       const x = START_X + m * PX_PER_M;
       this.add.rectangle(x, TRACK_TOP, 2, trackH, 0xffffff, 0.3).setOrigin(0.5, 0);
       this.add
@@ -248,15 +271,15 @@ export class RaceScene extends Phaser.Scene {
         .setAlpha(0.8);
     }
     // Finish line with a gantry.
-    this.add.image(FINISH_X, TRACK_TOP, 'checker').setOrigin(0.5, 0).setScale(2);
-    this.add.rectangle(FINISH_X - 70, TRACK_TOP - 58, 6, 62, 0xd9dde8).setOrigin(0.5, 0);
-    this.add.rectangle(FINISH_X + 70, TRACK_TOP - 58, 6, 62, 0xd9dde8).setOrigin(0.5, 0);
-    this.add.rectangle(FINISH_X, TRACK_TOP - 58, 160, 26, 0x120824).setStrokeStyle(3, 0xffd23f);
+    this.add.image(this.finishX, TRACK_TOP, 'checker').setOrigin(0.5, 0).setScale(2);
+    this.add.rectangle(this.finishX - 70, TRACK_TOP - 58, 6, 62, 0xd9dde8).setOrigin(0.5, 0);
+    this.add.rectangle(this.finishX + 70, TRACK_TOP - 58, 6, 62, 0xd9dde8).setOrigin(0.5, 0);
+    this.add.rectangle(this.finishX, TRACK_TOP - 58, 160, 26, 0x120824).setStrokeStyle(3, 0xffd23f);
     this.add
-      .text(FINISH_X, TRACK_TOP - 58, 'FINISH', { fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: COLORS.gold })
+      .text(this.finishX, TRACK_TOP - 58, 'FINISH', { fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: COLORS.gold })
       .setOrigin(0.5);
 
-    this.cameras.main.setBounds(0, 0, WORLD_W, GAME_H);
+    this.cameras.main.setBounds(0, 0, this.worldW, GAME_H);
   }
 
   private makeRunner(lane: number, alpha: number): Runner {
@@ -300,21 +323,26 @@ export class RaceScene extends Phaser.Scene {
     fixed(this.add.rectangle(0, HUD_TOP, GAME_W, GAME_H - HUD_TOP, 0x120824).setOrigin(0));
     fixed(this.add.rectangle(0, HUD_TOP, GAME_W, 3, 0xffd23f).setOrigin(0));
     this.cursor = fixed(this.add.rectangle(0, 0, CELL_W - 2, 3, 0xffd23f).setOrigin(0.5, 0));
-    for (let i = 0; i < this.ruleset.distance; i++) {
-      this.chars.push(
-        fixed(
-          this.add
-            .text(0, 0, ' ', { fontFamily: FONT_MONO, fontSize: '26px', fontStyle: 'bold', color: COLORS.white })
-            .setOrigin(0.5),
-        ),
-      );
+    for (let row = 0; row < 2; row++) {
+      const rowCells: Phaser.GameObjects.Text[] = [];
+      for (let col = 0; col < LINE_MAX; col++) {
+        rowCells.push(
+          fixed(
+            this.add
+              .text(0, LINE_Y[row] as number, '', { fontFamily: FONT_MONO, fontSize: '26px', fontStyle: 'bold', color: COLORS.white })
+              .setOrigin(0.5),
+          ),
+        );
+      }
+      this.cells.push(rowCells);
+      this.cellState.push(new Array<Cell>(LINE_MAX).fill(Cell.Empty));
     }
 
     // Scoreboard strip.
     fixed(this.add.rectangle(0, 0, GAME_W, 52, 0x120824, 0.82).setOrigin(0));
     fixed(this.add.rectangle(0, 52, GAME_W, 2, 0xffd23f).setOrigin(0));
     fixed(
-      this.add.text(16, 26, `100M  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
+      this.add.text(16, 26, `${eventLabel(this.ruleset.event).replace(' ', '')}  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
     );
     this.timerText = fixed(
       this.add.text(GAME_W / 2, 27, '0.00', { fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLORS.white }).setOrigin(0.5),
@@ -506,7 +534,7 @@ export class RaceScene extends Phaser.Scene {
   private onControl(key: ControlKey): void {
     this.sfx.unlock();
     if (key === 'Escape') {
-      if (this.phase === 'result') this.scene.start('rivals');
+      if (this.phase === 'result') this.scene.start('rivals', { event: this.ruleset.event });
       else this.beginRace();
       return;
     }
@@ -553,7 +581,7 @@ export class RaceScene extends Phaser.Scene {
     persistSave(this.store, this.save);
 
     this.timerText.setText(formatTime(timeMs)).setColor(COLORS.gold);
-    this.metresText.setText('100 m');
+    this.metresText.setText(`${this.ruleset.distance} m`);
     if (isRecord) this.pbText.setText(`PB ${formatTime(timeMs)}`);
     // Against a rival, the race is won by crossing the line first.
     let sweep = false;
@@ -625,8 +653,10 @@ export class RaceScene extends Phaser.Scene {
     );
 
     const pb = this.pbTimes;
+    // With four splits the last one is the finish time already shown above.
+    const shown = res.splits.length > 3 ? res.splits.slice(0, -1) : res.splits;
     p.splits.setText(
-      res.splits
+      shown
         .map((s) => {
           const ref = pb?.[s.mark - 1];
           const diff = ref !== undefined && previousPb !== null ? ` (${signed(s.tMs - ref)})` : '';
@@ -668,47 +698,54 @@ export class RaceScene extends Phaser.Scene {
   // ------------------------------------------------------------ text band
 
   private layoutText(text: string): void {
-    // Break into two lines at the space nearest the middle.
-    const mid = Math.floor(text.length / 2);
-    let split = -1;
-    for (let d = 0; d < text.length; d++) {
-      if (text[mid + d] === ' ') {
-        split = mid + d;
-        break;
-      }
-      if (text[mid - d] === ' ') {
-        split = mid - d;
-        break;
-      }
-    }
-    const firstLen = split < 0 ? text.length : split + 1;
-    for (let i = 0; i < this.chars.length; i++) {
-      const obj = this.chars[i] as Phaser.GameObjects.Text;
-      const lineIndex = i < firstLen ? 0 : 1;
-      const col = lineIndex === 0 ? i : i - firstLen;
-      const len = lineIndex === 0 ? firstLen : text.length - firstLen;
-      const x = (GAME_W - len * CELL_W) / 2 + CELL_W / 2 + col * CELL_W;
-      obj.setPosition(Math.round(x), LINE_Y[lineIndex] as number);
-      obj.setText(text[i] ?? ' ');
-      obj.setColor(COLORS.white);
-    }
-    this.markedTo = 0;
+    this.lines = wrapLines(text, LINE_MAX);
+    this.topLine = -1;
     this.nextRed = false;
     this.refreshText();
   }
 
+  /** Repaints the two visible rows. Only cells whose state changed are touched. */
   private refreshText(): void {
     const pos = this.sim.pos;
-    for (let i = this.markedTo; i < pos; i++) this.chars[i]?.setColor(COLORS.dim);
-    this.markedTo = pos;
-    const next = this.chars[pos];
-    if (next) {
-      next.setColor(this.nextRed ? COLORS.red : COLORS.gold);
-      this.cursor.setVisible(true).setPosition(next.x, next.y + 14);
-      this.cursor.setFillStyle(this.nextRed ? 0xff5566 : 0xffd23f);
-    } else {
-      this.cursor.setVisible(false);
+    const text = this.line.text;
+    const top = topLineFor(this.lines, pos);
+    const scrolled = top !== this.topLine;
+    this.topLine = top;
+    let cursorSet = false;
+
+    for (let row = 0; row < 2; row++) {
+      const line = this.lines[top + row];
+      const len = line ? line.end - line.start : 0;
+      const x0 = (GAME_W - len * CELL_W) / 2 + CELL_W / 2;
+      const rowCells = this.cells[row] as Phaser.GameObjects.Text[];
+      const rowState = this.cellState[row] as Cell[];
+      for (let col = 0; col < LINE_MAX; col++) {
+        const cell = rowCells[col] as Phaser.GameObjects.Text;
+        if (!line || col >= len) {
+          if (rowState[col] !== Cell.Empty) {
+            cell.setText('');
+            rowState[col] = Cell.Empty;
+          }
+          continue;
+        }
+        const index = line.start + col;
+        const state = index < pos ? Cell.Done : index === pos ? (this.nextRed ? Cell.NextRed : Cell.Next) : Cell.Todo;
+        if (scrolled) {
+          cell.setText(text[index] as string);
+          cell.x = Math.round(x0 + col * CELL_W);
+        }
+        if (scrolled || rowState[col] !== state) {
+          cell.setColor(state === Cell.Done ? COLORS.dim : state === Cell.Next ? COLORS.gold : state === Cell.NextRed ? COLORS.red : COLORS.white);
+          rowState[col] = state;
+        }
+        if (index === pos) {
+          this.cursor.setVisible(true).setPosition(cell.x, cell.y + 14);
+          this.cursor.setFillStyle(this.nextRed ? 0xff5566 : 0xffd23f);
+          cursorSet = true;
+        }
+      }
     }
+    if (!cursorSet) this.cursor.setVisible(false);
   }
 
   private showBanner(text: string, color: string, fadeAfterMs?: number): void {
@@ -794,7 +831,7 @@ export class RaceScene extends Phaser.Scene {
 
     // Camera and parallax.
     const cam = this.cameras.main;
-    cam.scrollX = Phaser.Math.Clamp(this.player.x - 300, 0, WORLD_W - GAME_W);
+    cam.scrollX = Phaser.Math.Clamp(this.player.x - 300, 0, this.worldW - GAME_W);
     this.stands.tilePositionX = Math.round(cam.scrollX * 0.5);
     this.track.tilePositionX = Math.round(cam.scrollX);
   }

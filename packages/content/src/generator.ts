@@ -14,6 +14,16 @@ export const DIFFICULTY_BAND: { readonly min: number; readonly max: number } = O
   max: 13.5,
 });
 
+/**
+ * The band for a line of any length. It is defined per 100 characters and
+ * scales with the line, so every distance is held to the same difficulty
+ * per metre.
+ */
+export function difficultyBandFor(length: number): { min: number; max: number } {
+  const k = length / 100;
+  return { min: DIFFICULTY_BAND.min * k, max: DIFFICULTY_BAND.max * k };
+}
+
 const MAX_ATTEMPTS = 200;
 
 const WORDS_BY_LENGTH: ReadonlyMap<number, readonly string[]> = (() => {
@@ -95,17 +105,15 @@ export interface SprintLine {
 /** Deterministically generates the sprint line for a seed. */
 export function generateSprintLine(seed: string, length = 100): SprintLine {
   const rng = createRng(`sprint:${GENERATOR_VERSION}:${length}:${seed}`);
+  const band = difficultyBandFor(length);
   let best: { text: string; difficulty: number; distance: number } | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const text = buildLine(rng, length);
     const difficulty = scoreDifficulty(text);
-    if (difficulty >= DIFFICULTY_BAND.min && difficulty <= DIFFICULTY_BAND.max) {
+    if (difficulty >= band.min && difficulty <= band.max) {
       return { seed, text, difficulty, attempts: attempt, generatorVersion: GENERATOR_VERSION };
     }
-    const distance = Math.min(
-      Math.abs(difficulty - DIFFICULTY_BAND.min),
-      Math.abs(difficulty - DIFFICULTY_BAND.max),
-    );
+    const distance = Math.min(Math.abs(difficulty - band.min), Math.abs(difficulty - band.max));
     if (best === null || distance < best.distance) best = { text, difficulty, distance };
   }
   // Practically unreachable; fall back to the closest candidate.

@@ -37,6 +37,28 @@ Text generator version 1: difficulty band 5.5 to 13.5 (about the 15th to
 - Should the text appear at "On your marks" or only at the gun?
 - Are the medal times right for a first-session player?
 
+## 200m, 400m, 800m and 1500m
+
+Status: **provisional.** Built on 2026-11-24 after the creative director
+set the event list and asked to keep going; the details below are my
+defaults and await confirmation.
+
+| Event | Ruleset | Distance | Splits at | Standards (bronze, silver, gold, world class) |
+| --- | --- | --- | --- | --- |
+| 200m | `200m@1` | 200 characters | 50, 100, 150, 200 m | 40.00, 30.00, 24.00, 20.00 s |
+| 400m | `400m@1` | 400 characters | 100, 200, 300, 400 m | 1:20.00, 1:00.00, 48.00, 40.00 s |
+| 800m | `800m@1` | 800 characters | 200, 400, 600, 800 m | 2:40.00, 2:00.00, 1:36.00, 1:20.00 |
+| 1500m | `1500m@1` | 1,500 characters | 400, 800, 1200, 1500 m | 5:00.00, 3:45.00, 3:00.00, 2:30.00 |
+
+- Every rule is the sprint's: one character per metre, 200 ms stumble, the same start and false start rule.
+- Text is the same lowercase word list at every distance, held to the same difficulty per metre.
+- Standards are 60, 80, 100 and 120 WPM held for the whole distance.
+- The same ten rivals race every distance at the same speed bands.
+
+Open questions: should the 800m and 1500m use real sentences with capitals
+and punctuation; should a stumble cost more late in a long race; and is a
+straight track acceptable for the 400m and beyond, or should laps be shown?
+
 ## Training rivals (Train mode)
 
 Status: **roster approved by the creative director on 2026-11-24** (names,

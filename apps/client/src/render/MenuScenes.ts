@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { RIVALS, allRivalsBeaten, nextRival } from '@typlympics/content';
-import { SPRINT_100M_V1, formatTime, medalFor } from '@typlympics/sim';
+import { EVENT_IDS, RULESETS, eventLabel, formatTime, medalFor, rulesetFor, type EventId, type SprintRuleset } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard } from '../input/keyboard';
 import { FORM_WINDOW, careerStats } from '../storage/career';
@@ -37,19 +37,27 @@ function onShutdown(scene: Phaser.Scene, detach: () => void): void {
 // ------------------------------------------------------------------ TRAIN
 
 interface EventRow {
+  event: EventId;
   label: string;
   detail: string;
-  playable: boolean;
 }
 
-/** Train: pick a distance, then race. Only the 100m exists so far. */
+/** Remembered so returning from a race lands on the distance you were training. */
+let lastEventIndex = 0;
+
+function bestFor(profile: Profile, ruleset: SprintRuleset): string {
+  const rec = profile.records[ruleset.id];
+  return rec && verifyRecord(ruleset, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
+}
+
+/** Train, step one: pick a distance. */
 export class EventSelectScene extends Phaser.Scene {
   private selected = 0;
   private rows: EventRow[] = [];
   private boxes: Phaser.GameObjects.Rectangle[] = [];
   private labels: Phaser.GameObjects.Text[] = [];
   private details: Phaser.GameObjects.Text[] = [];
-  private note!: Phaser.GameObjects.Text;
+  private mids: Phaser.GameObjects.Text[] = [];
   private sfx!: Sfx;
 
   constructor() {
@@ -61,31 +69,35 @@ export class EventSelectScene extends Phaser.Scene {
     if (!ctx) return;
     ensureTextures(this);
     this.sfx = new Sfx(ctx.save.settings.volume);
-    this.selected = 0;
+    this.selected = lastEventIndex;
     this.boxes = [];
     this.labels = [];
     this.details = [];
+    this.mids = [];
 
-    const rec = ctx.profile.records[SPRINT_100M_V1.id];
-    const best = rec && verifyRecord(SPRINT_100M_V1, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
-    this.rows = [
-      { label: '100 M', detail: best, playable: true },
-      { label: '200 M', detail: 'COMING SOON', playable: false },
-      { label: '400 M', detail: 'COMING SOON', playable: false },
-      { label: '800 M', detail: 'COMING SOON', playable: false },
-      { label: '1500 M', detail: 'COMING SOON', playable: false },
-    ];
+    this.rows = EVENT_IDS.map((event) => ({
+      event,
+      label: eventLabel(event),
+      detail: bestFor(ctx.profile, RULESETS[event]),
+    }));
 
     addBackdrop(this);
     addHeading(this, 'TRAIN', 'SELECT A DISTANCE');
     this.rows.forEach((row, i) => {
       const y = 116 + i * 62;
-      this.boxes.push(this.add.rectangle(GAME_W / 2, y + 26, 520, 52, 0x2a1458).setStrokeStyle(3, 0x5b3aa6));
-      this.labels.push(this.add.text(GAME_W / 2 - 236, y + 26, row.label, mono(30, COLORS.white)).setOrigin(0, 0.5));
-      this.details.push(this.add.text(GAME_W / 2 + 236, y + 26, row.detail, mono(18, COLORS.ice)).setOrigin(1, 0.5));
+      const beaten = rivalsBeatenFor(ctx.profile, RULESETS[row.event].id);
+      const done = RIVALS.filter((r) => beaten.includes(r.id)).length;
+      this.boxes.push(this.add.rectangle(GAME_W / 2, y + 26, 620, 52, 0x2a1458).setStrokeStyle(3, 0x5b3aa6));
+      this.labels.push(this.add.text(GAME_W / 2 - 286, y + 26, row.label, mono(30, COLORS.white)).setOrigin(0, 0.5));
+      this.mids.push(
+        this.add
+          .text(GAME_W / 2 + 40, y + 26, allRivalsBeaten(beaten) ? 'MEET CHAMPION' : `RIVALS ${done}/${RIVALS.length}`, mono(15, COLORS.ice))
+          .setOrigin(0.5),
+      );
+      this.details.push(this.add.text(GAME_W / 2 + 286, y + 26, row.detail, mono(18, COLORS.ice)).setOrigin(1, 0.5));
     });
-    this.note = this.add.text(GAME_W / 2, 450, '', mono(16, COLORS.red)).setOrigin(0.5);
-    addFooter(this, '▲ ▼  SELECT     ENTER  RACE     ESC  BACK');
+    this.add.text(GAME_W / 2, 446, 'One character is one metre at every distance.', mono(14, COLORS.dim)).setOrigin(0.5);
+    addFooter(this, 'UP / DOWN  SELECT     ENTER  NEXT     ESC  BACK');
 
     onShutdown(
       this,
@@ -96,18 +108,12 @@ export class EventSelectScene extends Phaser.Scene {
           if (key === 'ArrowUp' || key === 'ArrowDown') {
             const dir = key === 'ArrowDown' ? 1 : -1;
             this.selected = (this.selected + dir + this.rows.length) % this.rows.length;
-            this.note.setText('');
             this.sfx.step();
             this.refresh();
           } else if (key === 'Enter' || key === 'Tab') {
-            const row = this.rows[this.selected] as EventRow;
-            if (row.playable) {
-              this.sfx.marks();
-              this.scene.start('rivals');
-            } else {
-              this.note.setText(`THE ${row.label.replace(' ', '')} IS NOT BUILT YET`);
-              this.sfx.error();
-            }
+            lastEventIndex = this.selected;
+            this.sfx.marks();
+            this.scene.start('rivals', { event: (this.rows[this.selected] as EventRow).event });
           } else if (key === 'Escape' || key === 'Backspace') {
             this.scene.start('title');
           }
@@ -118,11 +124,12 @@ export class EventSelectScene extends Phaser.Scene {
   }
 
   private refresh(): void {
-    this.rows.forEach((row, i) => {
+    this.rows.forEach((_row, i) => {
       const on = i === this.selected;
       (this.boxes[i] as Phaser.GameObjects.Rectangle).setFillStyle(on ? 0xffd23f : 0x2a1458).setStrokeStyle(3, on ? 0xffffff : 0x5b3aa6);
-      (this.labels[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : row.playable ? COLORS.white : COLORS.dim);
-      (this.details[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : row.playable ? COLORS.ice : COLORS.dim);
+      (this.labels[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : COLORS.white);
+      (this.mids[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : COLORS.ice);
+      (this.details[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : COLORS.gold);
     });
   }
 }
@@ -152,9 +159,14 @@ export class RivalSelectScene extends Phaser.Scene {
   private portrait!: Phaser.GameObjects.Image;
   private card!: { number: Phaser.GameObjects.Text; name: Phaser.GameObjects.Text; nick: Phaser.GameObjects.Text; band: Phaser.GameObjects.Text; state: Phaser.GameObjects.Text };
   private bestText = '';
+  private ruleset: SprintRuleset = rulesetFor('100m');
 
   constructor() {
     super('rivals');
+  }
+
+  init(data: { event?: string | null }): void {
+    this.ruleset = rulesetFor(data?.event);
   }
 
   preload(): void {
@@ -169,10 +181,9 @@ export class RivalSelectScene extends Phaser.Scene {
     this.boxes = [];
     this.texts = [];
 
-    const beaten = rivalsBeatenFor(ctx.profile, SPRINT_100M_V1.id);
+    const beaten = rivalsBeatenFor(ctx.profile, this.ruleset.id);
     const upNext = nextRival(beaten);
-    const rec = ctx.profile.records[SPRINT_100M_V1.id];
-    this.bestText = rec && verifyRecord(SPRINT_100M_V1, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
+    this.bestText = bestFor(ctx.profile, this.ruleset);
 
     this.rows = [
       { rivalId: null, label: 'TIME TRIAL', status: this.bestText, locked: false, beaten: false },
@@ -196,7 +207,7 @@ export class RivalSelectScene extends Phaser.Scene {
     const done = RIVALS.filter((r) => beaten.includes(r.id)).length;
     addHeading(
       this,
-      '100 M  ·  CHOOSE YOUR RACE',
+      `${eventLabel(this.ruleset.event)}  ·  CHOOSE YOUR RACE`,
       allRivalsBeaten(beaten) ? 'MEET CHAMPION: EVERY RIVAL BEATEN' : `RIVALS BEATEN  ${done} OF ${RIVALS.length}`,
     );
 
@@ -243,7 +254,7 @@ export class RivalSelectScene extends Phaser.Scene {
               this.sfx.error();
             } else {
               this.sfx.marks();
-              this.scene.start('race', { rival: row.rivalId });
+              this.scene.start('race', { event: this.ruleset.event, rival: row.rivalId });
             }
           } else if (key === 'Escape' || key === 'Backspace') {
             this.scene.start('events');
@@ -292,8 +303,14 @@ const STANDARD_LABEL = { worldClass: 'WORLD CLASS', gold: 'GOLD', silver: 'SILVE
 
 /** Career: the signed-in athlete's record on this device. */
 export class CareerScene extends Phaser.Scene {
+  private eventIndex = 0;
+
   constructor() {
     super('career');
+  }
+
+  init(data: { eventIndex?: number }): void {
+    this.eventIndex = data?.eventIndex ?? 0;
   }
 
   create(): void {
@@ -301,7 +318,9 @@ export class CareerScene extends Phaser.Scene {
     if (!ctx) return;
     ensureTextures(this);
     const { profile } = ctx;
-    const stats = careerStats(profile, SPRINT_100M_V1.id);
+    const event = EVENT_IDS[this.eventIndex] as EventId;
+    const ruleset = RULESETS[event];
+    const stats = careerStats(profile, ruleset.id);
     const time = (ms: number | null): string => (ms === null ? '--.--' : formatTime(Math.round(ms)));
     const num = (v: number | null, digits = 0): string => (v === null ? '-' : v.toFixed(digits));
 
@@ -311,8 +330,8 @@ export class CareerScene extends Phaser.Scene {
 
     // Left: figures for the 100m.
     addPanel(this, 30, 106, 440, 338);
-    this.add.text(46, 116, '100 M', mono(22, COLORS.gold));
-    const standard = medalFor(SPRINT_100M_V1, stats.bestTimeMs);
+    this.add.text(46, 116, `◀  ${eventLabel(event)}  ▶`, mono(22, COLORS.gold));
+    const standard = medalFor(ruleset, stats.bestTimeMs);
     const trend =
       stats.trendMs === null ? '-' : `${stats.trendMs < 0 ? '-' : '+'}${formatTime(Math.abs(Math.round(stats.trendMs)))}`;
     const lines: Array<[string, string, string?]> = [
@@ -357,13 +376,13 @@ export class CareerScene extends Phaser.Scene {
     });
 
     // Right, middle: training rivals and the Meet Champion badge.
-    const beaten = rivalsBeatenFor(profile, SPRINT_100M_V1.id);
+    const beaten = rivalsBeatenFor(profile, ruleset.id);
     const champion = allRivalsBeaten(beaten);
     addPanel(this, 490, 306, 440, 84, champion);
     this.add.text(506, 314, 'BADGES', mono(18, COLORS.gold));
     const done = RIVALS.filter((r) => beaten.includes(r.id)).length;
     this.add
-      .text(914, 316, champion ? '★ 100M MEET CHAMPION' : `RIVALS BEATEN ${done} OF ${RIVALS.length}`, mono(15, champion ? COLORS.gold : COLORS.white))
+      .text(914, 316, champion ? `★ ${eventLabel(event).replace(' ', '')} MEET CHAMPION` : `RIVALS BEATEN ${done} OF ${RIVALS.length}`, mono(15, champion ? COLORS.gold : COLORS.white))
       .setOrigin(1, 0);
     // One pip per rival, slowest to fastest, in its kit colour once beaten.
     RIVALS.forEach((r, i) => {
@@ -379,8 +398,7 @@ export class CareerScene extends Phaser.Scene {
     this.add.text(914, 408, 'GOLD 0   SILVER 0   BRONZE 0', mono(14, COLORS.white)).setOrigin(1, 0);
     this.add.text(506, 426, 'Awarded once online leaderboards open.', mono(11, COLORS.dim));
 
-    this.add.text(GAME_W / 2, 472, 'Other distances appear here as they are built.', mono(13, COLORS.dim)).setOrigin(0.5);
-    addFooter(this, 'ESC or ENTER  BACK');
+    addFooter(this, 'LEFT / RIGHT  CHANGE DISTANCE     ESC or ENTER  BACK');
 
     onShutdown(
       this,
@@ -388,6 +406,10 @@ export class CareerScene extends Phaser.Scene {
         onChar: () => undefined,
         onControl: (key) => {
           if (key === 'Escape' || key === 'Enter' || key === 'Backspace') this.scene.start('title');
+          else if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            const dir = key === 'ArrowRight' ? 1 : -1;
+            this.scene.restart({ eventIndex: (this.eventIndex + dir + EVENT_IDS.length) % EVENT_IDS.length });
+          }
         },
       }),
     );
