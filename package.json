@@ -12,16 +12,18 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check": "pnpm typecheck && pnpm test && pnpm build",
-    "smoke": "pnpm build && node tools/smoke.mjs smoke-out",
+    "smoke": "pnpm build && tsx tools/smoke.mjs smoke-out",
     "site": "pnpm build && node tools/build-site.mjs",
-    "site:serve": "pnpm site && python3 -m http.server 4180 -d _site"
+    "site:serve": "pnpm site && python3 -m http.server 4180 -d _site",
+    "bundle:function": "esbuild supabase/functions/typlympics/index.ts --bundle --format=esm --platform=neutral --target=es2022 \"--external:npm:*\" --minify --legal-comments=none --outfile=supabase/functions/typlympics/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.7",
     "playwright-core": "^1.65.1",
     "tsx": "^4.0.0",
     "typescript": "~5.9.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "esbuild": "^0.28.0"
   },
   "packageManager": "pnpm@10.28.0"
 }

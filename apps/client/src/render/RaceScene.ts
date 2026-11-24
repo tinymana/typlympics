@@ -26,6 +26,7 @@ import {
 } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
+import { online as onlineApi, ordinal, type OfficialResult, type RoomMember, type Standing } from '../net/online';
 import {
   activeProfile,
   addToHistory,
@@ -62,6 +63,30 @@ import { ensureTextures } from './textures';
 import { topLineFor, wrapLines, type TextLine } from './textLines';
 
 type Phase = 'marks' | 'set' | 'race' | 'result';
+
+/** Everything a live online race needs, handed over by the race room. */
+export interface OnlineRace {
+  pin: string;
+  token: string;
+  /** This player's online athlete id. */
+  you: string;
+  race: { id: string; event: string; seed: string };
+  /** Local clock time (performance.now) of the gun. */
+  gunAt: number;
+  members: RoomMember[];
+}
+
+interface Opponent {
+  id: string;
+  runner: Runner;
+  tag: Phaser.GameObjects.Text;
+  pos: number;
+}
+
+const LANE_TINTS = [0xff9a5c, 0x8fd0ff, 0xb9e08a, 0xc9a0ff] as const;
+const TICK_MS = 400;
+const RESULT_POLL_MS = 1000;
+const RESULT_POLLS_MAX = 120;
 
 const MARKS_MS = 1500;
 const GUN_DELAY_MIN_MS = 1000;
@@ -152,6 +177,14 @@ export class RaceScene extends Phaser.Scene {
   /** Advance times of whoever runs in the other lane: the rival, or the personal-best ghost. */
   private laneTimes: readonly number[] | null = null;
   private wonAgainstRival = false;
+  /** Set for a live online race; null in Train. */
+  private online: OnlineRace | null = null;
+  private opponents: Opponent[] = [];
+  private playerLane = PLAYER_LANE;
+  private lastTickAt = 0;
+  private tickBusy = false;
+  private official: OfficialResult | null = null;
+  private standingsDone = false;
   private finishedAt = 0;
   private streak = 0;
   private dust: Phaser.GameObjects.Rectangle[] = [];
@@ -194,9 +227,11 @@ export class RaceScene extends Phaser.Scene {
     super('race');
   }
 
-  init(data: { event?: string | null; rival?: string | null }): void {
-    this.ruleset = rulesetFor(data?.event);
-    this.rival = rivalById(data?.rival);
+  init(data: { event?: string | null; rival?: string | null; online?: OnlineRace }): void {
+    this.online = data?.online ?? null;
+    this.ruleset = rulesetFor(this.online ? this.online.race.event : data?.event);
+    this.rival = this.online ? null : rivalById(data?.rival);
+    this.playerLane = this.online?.members.find((m) => m.id === this.online?.you)?.lane ?? PLAYER_LANE;
     this.finishX = START_X + this.ruleset.distance * PX_PER_M;
     this.worldW = this.finishX + 520;
   }
@@ -224,8 +259,25 @@ export class RaceScene extends Phaser.Scene {
     this.sfx.unlock();
 
     this.buildStadium();
-    this.player = this.makeRunner(PLAYER_LANE, 1);
+    this.player = this.makeRunner(this.playerLane, 1);
     this.ghost = this.makeRunner(GHOST_LANE, 0.5);
+    // Online: one runner per other athlete, in the lane the room gave them.
+    this.opponents = [];
+    this.official = null;
+    this.standingsDone = false;
+    this.tickBusy = false;
+    if (this.online) {
+      for (const m of this.online.members) {
+        if (m.id === this.online.you) continue;
+        const runner = this.makeRunner(m.lane, 1);
+        runner.sprite.setTint(LANE_TINTS[m.lane % LANE_TINTS.length] as number);
+        const tag = this.add
+          .text(0, 0, m.name, { fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: COLORS.white })
+          .setOrigin(0.5, 1)
+          .setDepth(20 + m.lane);
+        this.opponents.push({ id: m.id, runner, tag, pos: 0 });
+      }
+    }
     this.ghost.sprite.setTint(0x9fd0ff);
     this.ghostTag = this.add
       .text(0, 0, 'PB', { fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: COLORS.ice })
@@ -310,7 +362,7 @@ export class RaceScene extends Phaser.Scene {
     const d = this.dust[this.dustNext] as Phaser.GameObjects.Rectangle;
     this.dustNext = (this.dustNext + 1) % this.dust.length;
     const x = this.player.sprite.x - 14;
-    const y = laneFeetY(PLAYER_LANE) - 3;
+    const y = laneFeetY(this.playerLane) - 3;
     this.tweens.killTweensOf(d);
     d.setPosition(x, y).setAlpha(0.75).setScale(1).setVisible(true);
     this.tweens.add({ targets: d, x: x - 16, y: y - 8, alpha: 0, scale: 1.8, duration: 280 });
@@ -342,7 +394,7 @@ export class RaceScene extends Phaser.Scene {
     fixed(this.add.rectangle(0, 0, GAME_W, 52, 0x120824, 0.82).setOrigin(0));
     fixed(this.add.rectangle(0, 52, GAME_W, 2, 0xffd23f).setOrigin(0));
     fixed(
-      this.add.text(16, 26, `${eventLabel(this.ruleset.event).replace(' ', '')}  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
+      this.add.text(16, 26, this.online ? `${eventLabel(this.ruleset.event).replace(' ', '')} ONLINE` : `${eventLabel(this.ruleset.event).replace(' ', '')}  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
     );
     this.timerText = fixed(
       this.add.text(GAME_W / 2, 27, '0.00', { fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLORS.white }).setOrigin(0.5),
@@ -407,7 +459,12 @@ export class RaceScene extends Phaser.Scene {
     this.pbTimes = times;
     this.pbTimeMs = rec && times ? rec.timeMs : null;
 
-    this.line = generateSprintLine(randomSeed(), this.ruleset.distance);
+    // Online, every athlete builds the same line from the seed the server issued.
+    this.line = generateSprintLine(this.online ? this.online.race.seed : randomSeed(), this.ruleset.distance);
+    for (const o of this.opponents) {
+      o.pos = 0;
+      this.resetRunner(o.runner);
+    }
     this.sim = createSprint(this.ruleset, this.line.text);
     this.log = [];
     this.preGun = [];
@@ -533,6 +590,17 @@ export class RaceScene extends Phaser.Scene {
 
   private onControl(key: ControlKey): void {
     this.sfx.unlock();
+    if (this.online) {
+      // Online there is no restart: Esc abandons the race, and after the
+      // finish every key leads back to the room.
+      if (this.phase !== 'result' && key === 'Escape') {
+        void onlineApi.submit(this.online.token, this.online.race.id, packLog(this.log)).catch(() => undefined);
+        this.scene.start('lobby', { pin: this.online.pin });
+      } else if (this.phase === 'result' && (key === 'Enter' || key === 'Tab' || key === 'Escape')) {
+        this.scene.start('lobby', { pin: this.online.pin });
+      }
+      return;
+    }
     if (key === 'Escape') {
       if (this.phase === 'result') this.scene.start('rivals', { event: this.ruleset.event });
       else this.beginRace();
@@ -607,6 +675,7 @@ export class RaceScene extends Phaser.Scene {
     else this.sfx.finish();
     this.fillPanel(official, previous, isRecord);
     if (this.rival && rivalTime !== null) this.fillRivalOutcome(timeMs, rivalTime, isRecord, sweep);
+    if (this.online) void this.submitOnline(this.online);
     this.time.delayedCall(photo ? 1100 : 380, () => {
       if (this.phase === 'result' && this.result === official) this.panel.setVisible(true);
     });
@@ -665,6 +734,78 @@ export class RaceScene extends Phaser.Scene {
         .join('   '),
     );
     p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  esc: menu`);
+  }
+
+  // ------------------------------------------------------------ online
+
+  /**
+   * Sends the keystroke log to the server, which works out the official
+   * result, then keeps the standings up to date until everyone is in.
+   */
+  private async submitOnline(race: OnlineRace): Promise<void> {
+    const p = this.panelText;
+    p.headline.setText('SENDING YOUR RACE TO THE SERVER . . .').setColor(COLORS.ice);
+    p.medal.setText('').setColor(COLORS.ice);
+    this.promptText.setText('ENTER: BACK TO THE ROOM');
+    try {
+      this.official = await onlineApi.submit(race.token, race.race.id, packLog(this.log));
+    } catch (e) {
+      if (!this.scene.isActive()) return;
+      p.headline.setText('RESULT NOT RECORDED').setColor(COLORS.red);
+      p.medal.setText(e instanceof Error ? e.message.toUpperCase() : 'THE SERVER COULD NOT BE REACHED').setColor(COLORS.red);
+      return;
+    }
+    let polls = 0;
+    const poll = async (): Promise<void> => {
+      if (!this.scene.isActive() || this.standingsDone) return;
+      polls += 1;
+      try {
+        const res = await onlineApi.results(race.token, race.race.id);
+        if (!this.scene.isActive()) return;
+        this.showStandings(race, res.entries, res.done);
+        if (res.done || polls >= RESULT_POLLS_MAX) this.standingsDone = true;
+      } catch {
+        // A missed poll is harmless; the next one catches up.
+      }
+    };
+    await poll();
+    this.time.addEvent({ delay: RESULT_POLL_MS, repeat: RESULT_POLLS_MAX, callback: () => void poll() });
+  }
+
+  private showStandings(race: OnlineRace, entries: Standing[], done: boolean): void {
+    const p = this.panelText;
+    const me = entries.find((e) => e.id === race.you);
+    const official = this.official;
+    if (official?.status === 'review') {
+      p.headline.setText('RESULT HELD FOR REVIEW').setColor(COLORS.red);
+    } else if (me?.place) {
+      p.headline.setText(`${ordinal(me.place)} PLACE${done ? '' : ' SO FAR'}${official?.personalBest ? '   ONLINE BEST!' : ''}`).setColor(me.place === 1 ? COLORS.gold : COLORS.ice);
+    } else {
+      p.headline.setText('DID NOT FINISH').setColor(COLORS.ice);
+    }
+    p.medal
+      .setText(done ? `OFFICIAL TIME ${official?.timeMs != null ? formatTime(official.timeMs) : '--.--'}` : 'WAITING FOR THE OTHER ATHLETES . . .')
+      .setColor(done ? COLORS.gold : COLORS.ice);
+    const line = (e: Standing): string =>
+      `${e.place ? ordinal(e.place) : e.status === 'racing' ? '...' : 'DNF'} ${e.nationality} ${e.name} ${e.timeMs != null && e.place ? formatTime(e.timeMs) : ''}`.trim();
+    p.stats.setText(entries.slice(0, 2).map(line).join('     '));
+    p.splits.setText(entries.slice(2, 4).map(line).join('     ')).setColor(COLORS.ice);
+  }
+
+  /** Reports progress and reads everyone else's, a few times a second. */
+  private async tickOnline(race: OnlineRace): Promise<void> {
+    this.tickBusy = true;
+    try {
+      const positions = await onlineApi.tick(race.token, race.race.id, this.sim.pos);
+      for (const pos of positions) {
+        const o = this.opponents.find((x) => x.id === pos.id);
+        if (o) o.pos = Math.max(o.pos, pos.status === 'finished' ? this.ruleset.distance : pos.pos);
+      }
+    } catch {
+      // Opponents simply hold position until the next tick gets through.
+    } finally {
+      this.tickBusy = false;
+    }
   }
 
   /** Rewrites the headline, margin and prompt of the result panel for a race against a rival. */
@@ -762,9 +903,11 @@ export class RaceScene extends Phaser.Scene {
     const now = performance.now();
     const dt = Math.min(0.05, deltaMs / 1000);
 
-    if (this.phase === 'marks' && now - this.phaseAt >= MARKS_MS) {
+    // Online the server sets the gun time; in Train it is a random wait after "set".
+    const setDue = this.online ? now >= this.online.gunAt - MARKS_MS : now - this.phaseAt >= MARKS_MS;
+    if (this.phase === 'marks' && setDue) {
       this.phase = 'set';
-      this.gunDueAt = now + GUN_DELAY_MIN_MS + Math.random() * (GUN_DELAY_MAX_MS - GUN_DELAY_MIN_MS);
+      this.gunDueAt = this.online ? this.online.gunAt : now + GUN_DELAY_MIN_MS + Math.random() * (GUN_DELAY_MAX_MS - GUN_DELAY_MIN_MS);
       if (this.preGun.length === 0) this.showBanner('SET', COLORS.orange);
       this.sfx.set();
     } else if (this.phase === 'set' && now >= this.gunDueAt) {
@@ -826,6 +969,26 @@ export class RaceScene extends Phaser.Scene {
       if (intensity > 0) {
         line.x -= dt * 1400;
         if (line.x < -line.width) line.x = GAME_W + Math.random() * 200;
+      }
+    }
+
+    // Online opponents, eased toward the last position the server relayed.
+    if (this.online) {
+      const racing = this.phase === 'race' || (this.phase === 'result' && !this.standingsDone);
+      if (racing && !this.tickBusy && now - this.lastTickAt > TICK_MS) {
+        this.lastTickAt = now;
+        void this.tickOnline(this.online);
+      }
+      for (const o of this.opponents) {
+        const done = o.pos >= this.ruleset.distance;
+        const oMoved = this.advanceRunner(o.runner, START_X - 8 + o.pos * PX_PER_M + (done ? 110 : 0), dt);
+        let oFrame: string;
+        if (this.phase === 'marks') oFrame = 'ath_marks';
+        else if (this.phase === 'set' || o.pos === 0) oFrame = 'ath_set';
+        else if (oMoved / dt > 30) oFrame = this.runFrame(o.runner);
+        else oFrame = done ? 'ath_idle' : 'ath_run1';
+        this.setFrame(o.runner, oFrame);
+        o.tag.setPosition(o.runner.sprite.x, o.runner.sprite.y - 98);
       }
     }
 

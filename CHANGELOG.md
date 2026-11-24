@@ -5,6 +5,33 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (online)
+
+- Database: schema `typlympics` in the `tiny-mana-jams` Supabase project
+  (migrations in `supabase/migrations`). Not exposed through the public
+  API; row level security on with no policies.
+- Edge Function `typlympics` (`supabase/functions/typlympics`): sign-in by
+  name and PIN (bcrypt, five wrong tries locks for 15 minutes), rooms with
+  a five-digit PIN for up to four athletes, race start with a server gun
+  time, progress relay, result submission and the all-time boards. Results
+  are computed on the server from the submitted keystroke log with the
+  game's own simulation; a result is accepted once per race.
+- Client: `net/online.ts`, Compete (go online, host, join), race room, an
+  online mode in the race scene with up to three opponents, official
+  standings, and a World Records screen.
+- Save version 5 keeps the online session token (never the PIN).
+- Browser test drives a two-athlete online race against an in-memory
+  stand-in for the server (`tools/mock-online.mjs`). 93 unit tests.
+
+### Known limits (online)
+
+- Opponents' positions on screen come from each client a few times a
+  second and are display only; places and times come from the logs.
+- A finish is checked against when its log reached the server, with an
+  allowance of a few seconds, so small timestamp shading is not caught.
+- The gun time is sent to clients a few seconds ahead, so a modified
+  client could read it.
+
 ### Added (five distances)
 
 - Rulesets `200m@1`, `400m@1`, `800m@1` and `1500m@1` on the sprint's
