@@ -5,6 +5,7 @@ import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { OnlineError, gunTimeFrom, online, type Records, type RoomAnswer, type RoomState } from '../net/online';
 import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, persistSave, type KeyValueStore, type Profile, type Save } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
+import { addFlag, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
 
@@ -77,7 +78,7 @@ export class CompeteScene extends Phaser.Scene {
     this.typed = '';
 
     addBackdrop(this);
-    addHeading(this, 'COMPETE', `${ctx.profile.nationality}  ${ctx.profile.name}   ·   UP TO 4 ATHLETES`);
+    addHeading(this, 'COMPETE', `${ctx.profile.name}   ·   UP TO 4 ATHLETES`);
     addPanel(this, 180, 120, 600, 300);
     this.title = this.add.text(GAME_W / 2, 160, '', mono(22, COLORS.gold)).setOrigin(0.5);
     this.value = this.add.text(GAME_W / 2, 250, '', mono(44, COLORS.white, { align: 'center' })).setOrigin(0.5);
@@ -259,7 +260,7 @@ export class LobbyScene extends Phaser.Scene {
   private eventIndex = 0;
   private busy = false;
   private leaving = false;
-  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text }> = [];
+  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image }> = [];
   private eventText!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private note!: Phaser.GameObjects.Text;
@@ -299,6 +300,7 @@ export class LobbyScene extends Phaser.Scene {
       this.add.rectangle(430, y - 20, 450, 46, 0x2a1458).setOrigin(0).setStrokeStyle(2, 0x5b3aa6);
       this.add.text(446, y + 3, `${i + 1}`, mono(24, COLORS.dim)).setOrigin(0, 0.5);
       this.lanes.push({
+        flag: addFlag(this, 486, y + 3, 'USA').setVisible(false),
         name: this.add.text(486, y + 3, '', mono(20, COLORS.white)).setOrigin(0, 0.5),
         tag: this.add.text(866, y + 3, '', mono(13, COLORS.gold)).setOrigin(1, 0.5),
       });
@@ -398,7 +400,12 @@ export class LobbyScene extends Phaser.Scene {
     this.eventText.setText(isHost ? `◀ ${eventLabel(event)} ▶` : eventLabel(event));
     this.lanes.forEach((lane, i) => {
       const m = room.members.find((x) => x.lane === i);
-      lane.name.setText(m ? `${m.nationality}  ${m.name}` : 'OPEN').setColor(m ? COLORS.white : COLORS.dim);
+      lane.flag.setVisible(!!m);
+      if (m) lane.flag.setTexture(flagKey(m.nationality));
+      lane.name
+        .setText(m ? m.name : 'OPEN')
+        .setX(m ? 486 + flagWidth() + 10 : 486)
+        .setColor(m ? COLORS.white : COLORS.dim);
       lane.tag.setText(m ? [m.id === room.hostId ? 'HOST' : '', m.id === this.you ? 'YOU' : ''].filter(Boolean).join('  ') : '');
     });
     if (room.state === 'racing') this.status.setText('RACE IN PROGRESS: YOU ARE IN THE NEXT ONE');
@@ -488,7 +495,8 @@ export class RecordsScene extends Phaser.Scene {
       const y = 172 + i * 30;
       const color = medal[i] ?? COLORS.white;
       this.put(this.add.text(46, y, `${r.rank}`, mono(18, color)));
-      this.put(this.add.text(84, y, `${r.nationality}  ${r.name}`, mono(18, color)));
+      this.put(addFlag(this, 84, y + 10, r.nationality));
+      this.put(this.add.text(84 + flagWidth() + 8, y, r.name, mono(18, color)));
       this.put(this.add.text(430, y, formatTime(r.timeMs), mono(18, color)).setOrigin(1, 0));
       this.put(this.add.text(534, y, `${Math.round(r.wpm)}`, mono(18, COLORS.ice)).setOrigin(1, 0));
     });
@@ -496,7 +504,9 @@ export class RecordsScene extends Phaser.Scene {
     this.put(this.add.text(586, 114, 'TOP SPEED, ANY DISTANCE', mono(15, COLORS.gold)));
     data.topSpeed.slice(0, 5).forEach((r, i) => {
       const y = 144 + i * 27;
-      this.put(this.add.text(586, y, `${i + 1}  ${r.nationality} ${r.name}`, mono(15, COLORS.white)));
+      this.put(this.add.text(586, y, `${i + 1}`, mono(15, COLORS.white)));
+      this.put(addFlag(this, 606, y + 9, r.nationality, 1.5));
+      this.put(this.add.text(642, y, r.name, mono(15, COLORS.white)));
       this.put(this.add.text(914, y, `${Math.round(r.wpm)} WPM`, mono(15, COLORS.ice)).setOrigin(1, 0));
     });
     if (data.topSpeed.length === 0) this.put(this.add.text(750, 200, 'NO RACES YET', mono(14, COLORS.dim)).setOrigin(0.5));
@@ -504,7 +514,9 @@ export class RecordsScene extends Phaser.Scene {
     this.put(this.add.text(586, 310, 'MOST RACE WINS', mono(15, COLORS.gold)));
     data.mostWins.slice(0, 5).forEach((r, i) => {
       const y = 340 + i * 27;
-      this.put(this.add.text(586, y, `${i + 1}  ${r.nationality} ${r.name}`, mono(15, COLORS.white)));
+      this.put(this.add.text(586, y, `${i + 1}`, mono(15, COLORS.white)));
+      this.put(addFlag(this, 606, y + 9, r.nationality, 1.5));
+      this.put(this.add.text(642, y, r.name, mono(15, COLORS.white)));
       this.put(this.add.text(914, y, `${r.wins}`, mono(15, COLORS.ice)).setOrigin(1, 0));
     });
     if (data.mostWins.length === 0) this.put(this.add.text(750, 396, 'NO WINS YET', mono(14, COLORS.dim)).setOrigin(0.5));

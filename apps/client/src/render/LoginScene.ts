@@ -22,6 +22,7 @@ import {
   type Save,
 } from '../storage/save';
 import { COLORS, FONT_DISPLAY, FONT_MONO, GAME_H, GAME_W, STANDS_TOP } from './layout';
+import { addFlag, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
 
 type Step = 'name' | 'nation' | 'pin';
@@ -54,6 +55,7 @@ export class LoginScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private message!: Phaser.GameObjects.Text;
   private panel!: Phaser.GameObjects.Rectangle;
+  private nationFlag!: Phaser.GameObjects.Image;
 
   constructor() {
     super('login');
@@ -132,6 +134,10 @@ export class LoginScene extends Phaser.Scene {
       pin: makeRow(330, 'PIN'),
     };
 
+    // The flag sits at the left of the nationality row; its text is indented to make room.
+    this.nationFlag = addFlag(this, cx - 236, 278, 'USA', 2).setVisible(false);
+    this.rows.nation.value.setX(cx - 236 + flagWidth() + 12);
+
     this.message = this.add
       .text(cx, 396, '', { fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: COLORS.red })
       .setOrigin(0.5);
@@ -172,7 +178,7 @@ export class LoginScene extends Phaser.Scene {
       const y = 132 + i * 38;
       const rec = p.records[SPRINT_100M_V1.id];
       const best = rec && verifyRecord(SPRINT_100M_V1, rec) ? formatTime(rec.timeMs) : '--.--';
-      this.add.text(x - 132, y, p.nationality, { fontFamily: FONT_MONO, fontSize: '15px', fontStyle: 'bold', color: COLORS.orange }).setOrigin(0, 0.5);
+      addFlag(this, x - 134, y, p.nationality);
       this.add.text(x - 90, y, p.name, { fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color: COLORS.white }).setOrigin(0, 0.5);
       this.add.text(x + 132, y, best, { fontFamily: FONT_MONO, fontSize: '15px', color: COLORS.ice }).setOrigin(1, 0.5);
     });
@@ -319,6 +325,9 @@ export class LoginScene extends Phaser.Scene {
 
     this.rows.name.value.setText(this.nameText + (this.step === 'name' && this.nameText.length < NAME_MAX ? blink : ''));
 
+    const shownCode = this.existing ? this.existing.nationality : this.step === 'name' ? null : country[0];
+    this.nationFlag.setVisible(shownCode !== null);
+    if (shownCode) this.nationFlag.setTexture(flagKey(shownCode));
     if (this.existing) {
       this.rows.nation.value.setText(`${this.existing.nationality}  ${countryName(this.existing.nationality)}`);
     } else if (this.step === 'name') {

@@ -2,6 +2,25 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.8",
+      "date": "2026-11-24",
+      "title": "Flags",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Every nationality has a pixel flag, 70 in all, drawn in the game's own style."
+        },
+        {
+          "tag": "new",
+          "text": "On the track, your flag flies above your athlete and sits beside your name on the scoreboard. Online, each opponent carries theirs."
+        },
+        {
+          "tag": "new",
+          "text": "Flags also show when you pick your nationality, on the title screen, in the race room and on World Records."
+        }
+      ]
+    },
+    {
       "version": "0.7",
       "date": "2026-11-24",
       "title": "Compete online and World Records",

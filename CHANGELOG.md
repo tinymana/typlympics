@@ -5,6 +5,14 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (flags)
+
+- Pixel flags for all 70 nationalities and the guest, drawn from data in
+  `render/flagData.ts` (16 by 11 pixels each, no image files).
+- Flags on the track (above the player's athlete, beside the name on the
+  scoreboard, and on online opponents), at sign-in, on the title screen,
+  in the race room and on World Records. 98 tests.
+
 ### Added (online)
 
 - Database: schema `typlympics` in the `tiny-mana-jams` Supabase project

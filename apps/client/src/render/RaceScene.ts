@@ -58,6 +58,7 @@ import {
   TRACK_TOP,
   laneFeetY,
 } from './layout';
+import { addFlag, flagKey, flagWidth } from './flags';
 import { portraitKey, preloadPortraits } from './portraits';
 import { ensureTextures } from './textures';
 import { topLineFor, wrapLines, type TextLine } from './textLines';
@@ -80,6 +81,7 @@ interface Opponent {
   id: string;
   runner: Runner;
   tag: Phaser.GameObjects.Text;
+  flag: Phaser.GameObjects.Image;
   pos: number;
 }
 
@@ -181,6 +183,8 @@ export class RaceScene extends Phaser.Scene {
   private online: OnlineRace | null = null;
   private opponents: Opponent[] = [];
   private playerLane = PLAYER_LANE;
+  /** The player's flag, carried above their athlete down the track. */
+  private playerFlag!: Phaser.GameObjects.Image;
   private lastTickAt = 0;
   private tickBusy = false;
   private official: OfficialResult | null = null;
@@ -260,6 +264,7 @@ export class RaceScene extends Phaser.Scene {
 
     this.buildStadium();
     this.player = this.makeRunner(this.playerLane, 1);
+    this.playerFlag = this.add.image(0, 0, flagKey(this.profile.nationality)).setOrigin(0.5, 1).setScale(2).setDepth(20 + this.playerLane);
     this.ghost = this.makeRunner(GHOST_LANE, 0.5);
     // Online: one runner per other athlete, in the lane the room gave them.
     this.opponents = [];
@@ -275,7 +280,8 @@ export class RaceScene extends Phaser.Scene {
           .text(0, 0, m.name, { fontFamily: FONT_MONO, fontSize: '13px', fontStyle: 'bold', color: COLORS.white })
           .setOrigin(0.5, 1)
           .setDepth(20 + m.lane);
-        this.opponents.push({ id: m.id, runner, tag, pos: 0 });
+        const flag = addFlag(this, 0, 0, m.nationality).setOrigin(1, 1).setDepth(20 + m.lane);
+        this.opponents.push({ id: m.id, runner, tag, flag, pos: 0 });
       }
     }
     this.ghost.sprite.setTint(0x9fd0ff);
@@ -393,9 +399,21 @@ export class RaceScene extends Phaser.Scene {
     // Scoreboard strip.
     fixed(this.add.rectangle(0, 0, GAME_W, 52, 0x120824, 0.82).setOrigin(0));
     fixed(this.add.rectangle(0, 52, GAME_W, 2, 0xffd23f).setOrigin(0));
-    fixed(
-      this.add.text(16, 26, this.online ? `${eventLabel(this.ruleset.event).replace(' ', '')} ONLINE` : `${eventLabel(this.ruleset.event).replace(' ', '')}  ${this.profile.nationality} ${this.profile.name}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold }).setOrigin(0, 0.5),
+    // Event, then the athlete's flag and name. Online the name is left out to keep the strip clear.
+    const eventText = fixed(
+      this.add
+        .text(16, 26, `${eventLabel(this.ruleset.event).replace(' ', '')}${this.online ? ' ONLINE' : ''}`, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold })
+        .setOrigin(0, 0.5),
     );
+    const flagX = 16 + eventText.width + 12;
+    fixed(addFlag(this, flagX, 26, this.profile.nationality));
+    if (!this.online) {
+      fixed(
+        this.add
+          .text(flagX + flagWidth() + 8, 26, this.profile.name, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.white })
+          .setOrigin(0, 0.5),
+      );
+    }
     this.timerText = fixed(
       this.add.text(GAME_W / 2, 27, '0.00', { fontFamily: FONT_DISPLAY, fontSize: '40px', color: COLORS.white }).setOrigin(0.5),
     );
@@ -945,6 +963,8 @@ export class RaceScene extends Phaser.Scene {
     else frame = this.sim.pos === 0 ? 'ath_set' : 'ath_run1';
     this.setFrame(this.player, frame);
 
+    this.playerFlag.setPosition(this.player.sprite.x, this.player.sprite.y - 100);
+
     // Personal-best ghost, replayed from its own keystroke log.
     if (this.laneTimes) {
       const started = this.phase === 'race' || this.phase === 'result';
@@ -988,7 +1008,8 @@ export class RaceScene extends Phaser.Scene {
         else if (oMoved / dt > 30) oFrame = this.runFrame(o.runner);
         else oFrame = done ? 'ath_idle' : 'ath_run1';
         this.setFrame(o.runner, oFrame);
-        o.tag.setPosition(o.runner.sprite.x, o.runner.sprite.y - 98);
+        o.tag.setPosition(o.runner.sprite.x + flagWidth() / 2 + 2, o.runner.sprite.y - 98);
+        o.flag.setPosition(o.tag.x - o.tag.width / 2 - 4, o.tag.y - 1);
       }
     }
 

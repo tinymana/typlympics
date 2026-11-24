@@ -7,6 +7,7 @@ import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { activeProfile, browserStore, loadSave, verifyRecord } from '../storage/save';
 import { COLORS, FONT_MONO, GAME_W } from './layout';
+import { addFlag, flagWidth } from './flags';
 import { ensureTextures } from './textures';
 
 /** Where the menu frame and its rows sit on the start screen, in canvas pixels. */
@@ -84,7 +85,8 @@ export class TitleScene extends Phaser.Scene {
     });
 
     // Signed-in athlete, top left.
-    this.add.text(12, 8, `${profile.nationality}  ${profile.name}`, label(18, COLORS.white));
+    addFlag(this, 12, 19, profile.nationality);
+    this.add.text(12 + flagWidth() + 8, 8, profile.name, label(18, COLORS.white));
     this.add.text(12, 32, 'ESC: SWITCH ATHLETE', label(12, COLORS.ice));
 
     // Personal best, top right.
