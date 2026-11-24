@@ -1,5 +1,13 @@
 import Phaser from 'phaser';
-import { generateSprintLine, type SprintLine } from '@typlympics/content';
+import {
+  RIVALS,
+  allRivalsBeaten,
+  generateAiLog,
+  generateSprintLine,
+  rivalById,
+  type Rival,
+  type SprintLine,
+} from '@typlympics/content';
 import {
   SPRINT_100M_V1,
   applyInput,
@@ -21,8 +29,10 @@ import {
   addToHistory,
   browserStore,
   loadSave,
+  markRivalBeaten,
   packLog,
   persistSave,
+  rivalsBeatenFor,
   verifyRecord,
   type KeyValueStore,
   type Profile,
@@ -123,6 +133,11 @@ export class RaceScene extends Phaser.Scene {
   private result: SprintResult | null = null;
   private pbTimeMs: number | null = null;
   private pbTimes: readonly number[] | null = null;
+  /** The training rival being raced, or null for a time trial against your own best. */
+  private rival: Rival | null = null;
+  /** Advance times of whoever runs in the other lane: the rival, or the personal-best ghost. */
+  private laneTimes: readonly number[] | null = null;
+  private wonAgainstRival = false;
   private finishedAt = 0;
   private streak = 0;
   private dust: Phaser.GameObjects.Rectangle[] = [];
@@ -145,6 +160,7 @@ export class RaceScene extends Phaser.Scene {
   private pbText!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
   private panel!: Phaser.GameObjects.Container;
+  private promptText!: Phaser.GameObjects.Text;
   private panelText!: {
     headline: Phaser.GameObjects.Text;
     time: Phaser.GameObjects.Text;
@@ -157,6 +173,10 @@ export class RaceScene extends Phaser.Scene {
 
   constructor() {
     super('race');
+  }
+
+  init(data: { rival?: string | null }): void {
+    this.rival = rivalById(data?.rival);
   }
 
   create(): void {
@@ -335,6 +355,7 @@ export class RaceScene extends Phaser.Scene {
     const stats = this.add.text(0, 60, '', mono(18, COLORS.ice)).setOrigin(0.5);
     const splits = this.add.text(0, 88, '', mono(16, COLORS.dim)).setOrigin(0.5);
     const prompt = this.add.text(0, 126, 'ENTER or TAB: RACE AGAIN', mono(22, COLORS.pink)).setOrigin(0.5);
+    this.promptText = prompt;
     const seed = this.add.text(0, 152, '', mono(11, '#5a4a80')).setOrigin(0.5);
     this.tweens.add({ targets: prompt, alpha: 0.35, duration: 480, yoyo: true, repeat: -1 });
 
@@ -361,9 +382,24 @@ export class RaceScene extends Phaser.Scene {
     this.phase = 'marks';
     this.phaseAt = performance.now();
 
+    // The other lane: a rival typing this line under the same rules, or your own best.
+    this.wonAgainstRival = false;
+    if (this.rival) {
+      const aiLog = generateAiLog(this.rival, this.line.text, this.line.seed, this.ruleset.errorLockoutMs);
+      this.laneTimes = simulate(this.ruleset, this.line.text, aiLog).advanceTimes;
+      this.ghost.sprite.setTint(this.rival.tint).setAlpha(1);
+      this.ghost.shadow.setAlpha(1);
+      this.ghostTag.setText(this.rival.name).setColor(COLORS.white);
+    } else {
+      this.laneTimes = this.pbTimes;
+      this.ghost.sprite.setTint(0x9fd0ff).setAlpha(0.5);
+      this.ghost.shadow.setAlpha(0.5);
+      this.ghostTag.setText('PB').setColor(COLORS.ice);
+    }
+
     this.resetRunner(this.player);
     this.resetRunner(this.ghost);
-    const showGhost = this.pbTimes !== null;
+    const showGhost = this.laneTimes !== null;
     this.ghost.sprite.setVisible(showGhost);
     this.ghost.shadow.setVisible(showGhost);
     this.ghostTag.setVisible(showGhost);
@@ -375,6 +411,7 @@ export class RaceScene extends Phaser.Scene {
     this.wpmText.setText('');
     this.pbText.setText(this.pbTimeMs !== null ? `PB ${formatTime(this.pbTimeMs)}` : 'PB --.--');
     this.panel.setVisible(false);
+    this.promptText.setText('ENTER or TAB: RACE AGAIN');
     this.showBanner('ON YOUR MARKS', COLORS.white);
     this.sfx.marks();
   }
@@ -461,11 +498,16 @@ export class RaceScene extends Phaser.Scene {
   private onControl(key: ControlKey): void {
     this.sfx.unlock();
     if (key === 'Escape') {
-      if (this.phase === 'result') this.scene.start('events');
+      if (this.phase === 'result') this.scene.start('rivals');
       else this.beginRace();
       return;
     }
-    if (this.phase === 'result' && (key === 'Enter' || key === 'Tab')) this.beginRace();
+    if (this.phase === 'result' && (key === 'Enter' || key === 'Tab')) {
+      // Enter moves up the ladder after a win; Tab always repeats the same race.
+      const next = key === 'Enter' ? this.nextRivalAfterWin() : null;
+      if (next) this.rival = next;
+      this.beginRace();
+    }
   }
 
   private finishRace(): void {
@@ -505,16 +547,30 @@ export class RaceScene extends Phaser.Scene {
     this.timerText.setText(formatTime(timeMs)).setColor(COLORS.gold);
     this.metresText.setText('100 m');
     if (isRecord) this.pbText.setText(`PB ${formatTime(timeMs)}`);
-    const photo = previous !== null && Math.abs(timeMs - previous) < PHOTO_FINISH_MS;
+    // Against a rival, the race is won by crossing the line first.
+    let sweep = false;
+    const rivalTime = this.rival ? ((this.laneTimes?.[this.ruleset.distance - 1] as number | undefined) ?? null) : null;
+    if (this.rival && rivalTime !== null) {
+      this.wonAgainstRival = timeMs < rivalTime;
+      if (this.wonAgainstRival) {
+        const before = allRivalsBeaten(rivalsBeatenFor(this.profile, this.ruleset.id));
+        markRivalBeaten(this.profile, this.ruleset.id, this.rival.id);
+        sweep = !before && allRivalsBeaten(rivalsBeatenFor(this.profile, this.ruleset.id));
+        persistSave(this.store, this.save);
+      }
+    }
+    const reference = rivalTime ?? previous;
+    const photo = reference !== null && Math.abs(timeMs - reference) < PHOTO_FINISH_MS;
     if (photo) {
       this.showBanner('PHOTO FINISH', COLORS.ice, 900);
       this.cameras.main.flash(160, 255, 255, 255);
     } else {
       this.banner.setVisible(false);
     }
-    if (isRecord) this.sfx.record();
+    if (isRecord || sweep || this.wonAgainstRival) this.sfx.record();
     else this.sfx.finish();
     this.fillPanel(official, previous, isRecord);
+    if (this.rival && rivalTime !== null) this.fillRivalOutcome(timeMs, rivalTime, isRecord, sweep);
     this.time.delayedCall(photo ? 1100 : 380, () => {
       if (this.phase === 'result' && this.result === official) this.panel.setVisible(true);
     });
@@ -571,6 +627,33 @@ export class RaceScene extends Phaser.Scene {
         .join('   '),
     );
     p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  esc: menu`);
+  }
+
+  /** Rewrites the headline, margin and prompt of the result panel for a race against a rival. */
+  private fillRivalOutcome(timeMs: number, rivalTime: number, isRecord: boolean, sweep: boolean): void {
+    const rival = this.rival as Rival;
+    const p = this.panelText;
+    const margin = `${(Math.abs(timeMs - rivalTime) / 1000).toFixed(Math.abs(timeMs - rivalTime) < PHOTO_FINISH_MS ? 3 : 2)} s`;
+    const best = isRecord ? '  +  NEW PERSONAL BEST' : '';
+    if (sweep) {
+      p.headline.setText('MEET CHAMPION!  ALL RIVALS BEATEN').setColor(COLORS.gold);
+    } else if (this.wonAgainstRival) {
+      p.headline.setText(`YOU BEAT ${rival.name}!${best}`).setColor(COLORS.gold);
+    } else {
+      p.headline.setText(`${rival.name} WINS${best}`).setColor(isRecord ? COLORS.gold : COLORS.ice);
+    }
+    if (timeMs === rivalTime) p.delta.setText(`DEAD HEAT WITH ${rival.name}`).setColor(COLORS.ice);
+    else if (this.wonAgainstRival) p.delta.setText(`${margin} AHEAD OF ${rival.name}`).setColor(COLORS.green);
+    else p.delta.setText(`${margin} BEHIND ${rival.name}`).setColor(COLORS.red);
+
+    const next = this.nextRivalAfterWin();
+    this.promptText.setText(next ? `ENTER: FACE ${next.name}     TAB: RACE AGAIN` : 'ENTER or TAB: RACE AGAIN');
+  }
+
+  /** After a win, the next rival up the ladder, if there is one. */
+  private nextRivalAfterWin(): Rival | null {
+    if (!this.rival || !this.wonAgainstRival) return null;
+    return RIVALS[RIVALS.indexOf(this.rival) + 1] ?? null;
   }
 
   // ------------------------------------------------------------ text band
@@ -674,9 +757,9 @@ export class RaceScene extends Phaser.Scene {
     this.setFrame(this.player, frame);
 
     // Personal-best ghost, replayed from its own keystroke log.
-    if (this.pbTimes) {
+    if (this.laneTimes) {
       const started = this.phase === 'race' || this.phase === 'result';
-      const gpos = started ? positionAt(this.pbTimes, now - this.gunAt) : 0;
+      const gpos = started ? positionAt(this.laneTimes, now - this.gunAt) : 0;
       const ghostDone = gpos >= this.ruleset.distance;
       const gTarget = START_X - 8 + gpos * PX_PER_M + (ghostDone ? 110 : 0);
       const gMoved = this.advanceRunner(this.ghost, gTarget, dt);

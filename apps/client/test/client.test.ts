@@ -18,10 +18,12 @@ import {
   hashPin,
   isValidPin,
   loadSave,
+  markRivalBeaten,
   normalizeName,
   packLog,
   parseSave,
   persistSave,
+  rivalsBeatenFor,
   serializeSave,
   verifyRecord,
   type KeyValueStore,
@@ -199,7 +201,7 @@ describe('versioned save', () => {
 
   it('migrates a version 0 save and drops its unverifiable time', () => {
     const save = parseSave(JSON.stringify({ pb100m: 9876, volume: 0.3, races: 12 }));
-    expect(save.saveVersion).toBe(3);
+    expect(save.saveVersion).toBe(4);
     expect(save.settings.volume).toBe(0.3);
     expect(save.profiles[GUEST_ID]?.totals.races).toBe(12);
     expect(save.profiles[GUEST_ID]?.records).toEqual({});
@@ -209,7 +211,7 @@ describe('versioned save', () => {
     const rec = makeRecord();
     const v1 = { saveVersion: 1, settings: { volume: 0.5 }, records: { [R.id]: rec }, totals: { races: 9, finishes: 8 } };
     const save = parseSave(JSON.stringify(v1));
-    expect(save.saveVersion).toBe(3);
+    expect(save.saveVersion).toBe(4);
     expect(save.activeProfileId).toBeNull();
     const guest = save.profiles[GUEST_ID];
     expect(guest?.records[R.id]).toEqual(rec);
@@ -227,7 +229,7 @@ describe('versioned save', () => {
     v2.saveVersion = 2;
     delete v2.profiles.ryan.history;
     const save = parseSave(JSON.stringify(v2));
-    expect(save.saveVersion).toBe(3);
+    expect(save.saveVersion).toBe(4);
     const ryan = save.profiles['ryan'];
     expect(ryan?.history).toEqual([]);
     expect(ryan?.records[R.id]).toBeDefined();
@@ -354,6 +356,31 @@ describe('race history and career stats', () => {
     raw.profiles.ryan.history.push({ timeMs: 'quick' });
     const parsed = parseSave(JSON.stringify(raw));
     expect(parsed.profiles['ryan']?.history).toEqual([run(11000)]);
+  });
+});
+
+describe('rivals beaten', () => {
+  it('records each rival once per event and survives a round trip', () => {
+    const save = saveWithAthlete();
+    const ryan = save.profiles['ryan'] as NonNullable<(typeof save.profiles)[string]>;
+    expect(rivalsBeatenFor(ryan, R.id)).toEqual([]);
+    expect(markRivalBeaten(ryan, R.id, 'snail')).toBe(true);
+    expect(markRivalBeaten(ryan, R.id, 'snail')).toBe(false);
+    expect(markRivalBeaten(ryan, R.id, 'tortoise')).toBe(true);
+    expect(rivalsBeatenFor(ryan, R.id)).toEqual(['snail', 'tortoise']);
+    expect(rivalsBeatenFor(ryan, '200m@1')).toEqual([]);
+    const parsed = parseSave(serializeSave(save));
+    expect(parsed.profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['snail', 'tortoise'] });
+  });
+
+  it('migrates a version 3 save with no rivals and cleans a malformed list', () => {
+    const v3 = JSON.parse(serializeSave(saveWithAthlete()));
+    v3.saveVersion = 3;
+    delete v3.profiles.ryan.rivalsBeaten;
+    expect(parseSave(JSON.stringify(v3)).profiles['ryan']?.rivalsBeaten).toEqual({});
+    const bad = JSON.parse(serializeSave(saveWithAthlete()));
+    bad.profiles.ryan.rivalsBeaten = { [R.id]: ['snail', 7, 'snail'], other: 'nope' };
+    expect(parseSave(JSON.stringify(bad)).profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['snail'] });
   });
 });
 

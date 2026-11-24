@@ -4,7 +4,7 @@
     {
       "version": "0.5",
       "date": "2026-11-24",
-      "title": "The main menu and your career",
+      "title": "The main menu, rivals and your career",
       "items": [
         {
           "tag": "new",
@@ -13,6 +13,18 @@
         {
           "tag": "new",
           "text": "Train: pick a distance, then race. The 100m is open; the 200m, 400m, 800m and 1500m are listed and on the way."
+        },
+        {
+          "tag": "new",
+          "text": "Rivals: after picking a distance, race a computer athlete. Eight of them, from the Snail at 20 words a minute to the Falcon at 120. Each one unlocks when you beat the one before."
+        },
+        {
+          "tag": "new",
+          "text": "Rivals play by your rules: they type the same line, make mistakes and stumble like you do. Beat all eight to earn the Meet Champion badge on your career page."
+        },
+        {
+          "tag": "new",
+          "text": "Time trial is still there: race the ghost of your own best run."
         },
         {
           "tag": "new",

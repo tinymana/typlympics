@@ -36,3 +36,28 @@ Text generator version 1: difficulty band 5.5 to 13.5 (about the 15th to
 - Is 200 ms the right stumble length?
 - Should the text appear at "On your marks" or only at the gun?
 - Are the medal times right for a first-session player?
+
+## Training rivals (Train mode)
+
+Status: **provisional, built at the creative director's request on
+2026-11-24; names and speeds await confirmation.** Rivals are content, not
+rules: they type under ruleset `100m@1` like any player, and results
+against them never reach a leaderboard.
+
+| Rival | Speed | 100m time (about) | Reaction | Error rate per key |
+| --- | --- | --- | --- | --- |
+| The Snail | 20 WPM | 60.0 s | 0.42 s | 3.0% |
+| The Tortoise | 30 WPM | 40.0 s | 0.36 s | 2.5% |
+| The Penguin | 40 WPM | 30.0 s | 0.31 s | 2.0% |
+| The Fox | 55 WPM | 21.8 s | 0.27 s | 1.8% |
+| The Hare | 70 WPM | 17.1 s | 0.24 s | 1.5% |
+| The Gazelle | 85 WPM | 14.1 s | 0.21 s | 1.2% |
+| The Cheetah | 100 WPM | 12.0 s | 0.185 s | 1.0% |
+| The Falcon | 120 WPM | 10.0 s | 0.16 s | 0.6% |
+
+- A rival's finishing time varies by up to 1.5% either way from race to race.
+- A rival unlocks when the one before it is beaten. A win means crossing the line first; a dead heat is not a win.
+- Beating all eight at a distance earns that distance's Meet Champion badge.
+
+Open questions: are eight rivals and these speeds right, and should a fast
+typist be able to skip straight to a harder rival?

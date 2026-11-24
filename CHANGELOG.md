@@ -19,7 +19,17 @@ All notable changes to this project are recorded here. The format follows
 - Save version 3: each athlete keeps a history of finished races (latest
   200). Version 2 saves migrate with an empty history.
 - Compete and World Records screens describing the planned flow.
-- 73 tests; the smoke test walks the menu and opens every screen.
+- Training rivals: eight computer athletes (Snail 20 WPM to Falcon 120
+  WPM) in `packages/content/src/rivals.ts`. A rival's keystroke log is
+  generated from its speed, rhythm and error rate and run through the same
+  simulation as the player's. Rivals unlock in order; Enter after a win
+  faces the next one.
+- Opponent select after the distance: time trial against your own best,
+  or the rival ladder.
+- Meet Champion badge and rival progress on the career page.
+- Save version 4: rivals beaten per event. Version 3 saves migrate.
+- 82 tests; the smoke test walks the menu, opens every screen and beats
+  a rival.
 
 ### Added (sign-in and start screen)
 

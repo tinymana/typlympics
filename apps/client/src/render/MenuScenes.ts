@@ -1,10 +1,19 @@
 import Phaser from 'phaser';
+import { RIVALS, allRivalsBeaten, nextRival } from '@typlympics/content';
 import { SPRINT_100M_V1, formatTime, medalFor } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard } from '../input/keyboard';
 import { FORM_WINDOW, careerStats } from '../storage/career';
 import { countryName } from '../storage/countries';
-import { activeProfile, browserStore, loadSave, verifyRecord, type Profile, type Save } from '../storage/save';
+import {
+  activeProfile,
+  browserStore,
+  loadSave,
+  rivalsBeatenFor,
+  verifyRecord,
+  type Profile,
+  type Save,
+} from '../storage/save';
 import { COLORS, GAME_W } from './layout';
 import { ensureTextures } from './textures';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
@@ -93,7 +102,7 @@ export class EventSelectScene extends Phaser.Scene {
             const row = this.rows[this.selected] as EventRow;
             if (row.playable) {
               this.sfx.marks();
-              this.scene.start('race');
+              this.scene.start('rivals');
             } else {
               this.note.setText(`THE ${row.label.replace(' ', '')} IS NOT BUILT YET`);
               this.sfx.error();
@@ -113,6 +122,129 @@ export class EventSelectScene extends Phaser.Scene {
       (this.boxes[i] as Phaser.GameObjects.Rectangle).setFillStyle(on ? 0xffd23f : 0x2a1458).setStrokeStyle(3, on ? 0xffffff : 0x5b3aa6);
       (this.labels[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : row.playable ? COLORS.white : COLORS.dim);
       (this.details[i] as Phaser.GameObjects.Text).setColor(on ? COLORS.ink : row.playable ? COLORS.ice : COLORS.dim);
+    });
+  }
+}
+
+// ------------------------------------------------------------------ TRAIN: opponent
+
+interface OpponentRow {
+  rivalId: string | null;
+  label: string;
+  speed: string;
+  status: string;
+  locked: boolean;
+  beaten: boolean;
+}
+
+/**
+ * Train, step two: who to race. A time trial against your own best, or the
+ * ladder of rivals, slowest to fastest. Each rival unlocks when the one
+ * before it is beaten.
+ */
+export class RivalSelectScene extends Phaser.Scene {
+  private selected = 0;
+  private rows: OpponentRow[] = [];
+  private boxes: Phaser.GameObjects.Rectangle[] = [];
+  private texts: Phaser.GameObjects.Text[][] = [];
+  private note!: Phaser.GameObjects.Text;
+  private sfx!: Sfx;
+
+  constructor() {
+    super('rivals');
+  }
+
+  create(): void {
+    const ctx = requireProfile(this);
+    if (!ctx) return;
+    ensureTextures(this);
+    this.sfx = new Sfx(ctx.save.settings.volume);
+    this.boxes = [];
+    this.texts = [];
+
+    const beaten = rivalsBeatenFor(ctx.profile, SPRINT_100M_V1.id);
+    const upNext = nextRival(beaten);
+    const rec = ctx.profile.records[SPRINT_100M_V1.id];
+    const best = rec && verifyRecord(SPRINT_100M_V1, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
+
+    this.rows = [
+      { rivalId: null, label: 'TIME TRIAL', speed: 'YOUR OWN BEST', status: best, locked: false, beaten: false },
+      ...RIVALS.map((r, i): OpponentRow => {
+        const isBeaten = beaten.includes(r.id);
+        const previous = RIVALS[i - 1];
+        const locked = !isBeaten && previous !== undefined && !beaten.includes(previous.id);
+        return {
+          rivalId: r.id,
+          label: r.name,
+          speed: `${r.wpm} WPM`,
+          status: isBeaten ? 'BEATEN' : locked ? 'LOCKED' : 'CHALLENGER',
+          locked,
+          beaten: isBeaten,
+        };
+      }),
+    ];
+    // Start on the next rival to beat, or the time trial once all are beaten.
+    this.selected = upNext ? this.rows.findIndex((r) => r.rivalId === upNext.id) : 0;
+
+    addBackdrop(this);
+    const done = beaten.filter((id) => RIVALS.some((r) => r.id === id)).length;
+    addHeading(
+      this,
+      '100 M  ·  CHOOSE YOUR RACE',
+      allRivalsBeaten(beaten) ? 'MEET CHAMPION: EVERY RIVAL BEATEN' : `RIVALS BEATEN  ${done} OF ${RIVALS.length}`,
+    );
+    this.rows.forEach((row, i) => {
+      const y = 104 + i * 40;
+      this.boxes.push(this.add.rectangle(GAME_W / 2, y + 17, 640, 34, 0x2a1458).setStrokeStyle(2, 0x5b3aa6));
+      this.texts.push([
+        this.add.text(GAME_W / 2 - 300, y + 17, row.label, mono(20, COLORS.white)).setOrigin(0, 0.5),
+        this.add.text(GAME_W / 2 + 60, y + 17, row.speed, mono(16, COLORS.ice)).setOrigin(1, 0.5),
+        this.add.text(GAME_W / 2 + 300, y + 17, row.status, mono(15, COLORS.ice)).setOrigin(1, 0.5),
+      ]);
+    });
+    this.note = this.add.text(GAME_W / 2, 482, '', mono(15, COLORS.red)).setOrigin(0.5);
+    addFooter(this, '▲ ▼  SELECT     ENTER  RACE     ESC  BACK');
+
+    onShutdown(
+      this,
+      attachKeyboard(window, {
+        onChar: () => undefined,
+        onControl: (key) => {
+          this.sfx.unlock();
+          if (key === 'ArrowUp' || key === 'ArrowDown') {
+            const dir = key === 'ArrowDown' ? 1 : -1;
+            this.selected = (this.selected + dir + this.rows.length) % this.rows.length;
+            this.note.setText('');
+            this.sfx.step();
+            this.refresh();
+          } else if (key === 'Enter' || key === 'Tab') {
+            const row = this.rows[this.selected] as OpponentRow;
+            if (row.locked) {
+              const blocker = this.rows.find((r) => r.rivalId !== null && !r.beaten && !r.locked);
+              this.note.setText(blocker ? `BEAT ${blocker.label} FIRST` : 'LOCKED');
+              this.sfx.error();
+            } else {
+              this.sfx.marks();
+              this.scene.start('race', { rival: row.rivalId });
+            }
+          } else if (key === 'Escape' || key === 'Backspace') {
+            this.scene.start('events');
+          }
+        },
+      }),
+    );
+    this.refresh();
+  }
+
+  private refresh(): void {
+    this.rows.forEach((row, i) => {
+      const on = i === this.selected;
+      (this.boxes[i] as Phaser.GameObjects.Rectangle).setFillStyle(on ? 0xffd23f : 0x2a1458).setStrokeStyle(2, on ? 0xffffff : 0x5b3aa6);
+      const base = row.locked ? COLORS.dim : COLORS.white;
+      const [label, speed, status] = this.texts[i] as Phaser.GameObjects.Text[];
+      label?.setColor(on ? COLORS.ink : base);
+      speed?.setColor(on ? COLORS.ink : row.locked ? COLORS.dim : COLORS.ice);
+      status?.setColor(on ? COLORS.ink : row.beaten ? COLORS.green : row.locked ? COLORS.dim : COLORS.gold);
     });
   }
 }
@@ -166,17 +298,17 @@ export class CareerScene extends Phaser.Scene {
     });
 
     // Right: recent races.
-    addPanel(this, 490, 106, 440, 246, false);
-    this.add.text(506, 116, 'RECENT RACES', mono(18, COLORS.gold));
-    this.add.text(506, 146, 'DATE', mono(12, COLORS.dim));
-    this.add.text(700, 146, 'TIME', mono(12, COLORS.dim)).setOrigin(1, 0);
-    this.add.text(790, 146, 'WPM', mono(12, COLORS.dim)).setOrigin(1, 0);
-    this.add.text(914, 146, 'ACCURACY', mono(12, COLORS.dim)).setOrigin(1, 0);
+    addPanel(this, 490, 106, 440, 190, false);
+    this.add.text(506, 114, 'RECENT RACES', mono(18, COLORS.gold));
+    this.add.text(506, 142, 'DATE', mono(12, COLORS.dim));
+    this.add.text(700, 142, 'TIME', mono(12, COLORS.dim)).setOrigin(1, 0);
+    this.add.text(790, 142, 'WPM', mono(12, COLORS.dim)).setOrigin(1, 0);
+    this.add.text(914, 142, 'ACCURACY', mono(12, COLORS.dim)).setOrigin(1, 0);
     if (stats.recent.length === 0) {
-      this.add.text(710, 230, 'No races yet.\nTRAIN to set your first time.', mono(15, COLORS.dim, { align: 'center' })).setOrigin(0.5);
+      this.add.text(710, 220, 'No races yet.\nTRAIN to set your first time.', mono(15, COLORS.dim, { align: 'center' })).setOrigin(0.5);
     }
-    stats.recent.forEach((r, i) => {
-      const y = 166 + i * 22;
+    stats.recent.slice(0, 6).forEach((r, i) => {
+      const y = 160 + i * 21;
       const d = new Date(r.at);
       const date = Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       const isBest = r.timeMs === stats.bestTimeMs;
@@ -187,11 +319,28 @@ export class CareerScene extends Phaser.Scene {
       this.add.text(914, y, `${(r.accuracy * 100).toFixed(1)}%`, mono(15, color)).setOrigin(1, 0);
     });
 
-    // Right, below: medals.
-    addPanel(this, 490, 364, 440, 80, false);
-    this.add.text(506, 374, 'WEEKLY MEDALS', mono(18, COLORS.gold));
-    this.add.text(506, 404, 'GOLD 0     SILVER 0     BRONZE 0', mono(15, COLORS.white));
-    this.add.text(506, 424, 'Medals are awarded once online leaderboards open.', mono(12, COLORS.dim));
+    // Right, middle: training rivals and the Meet Champion badge.
+    const beaten = rivalsBeatenFor(profile, SPRINT_100M_V1.id);
+    const champion = allRivalsBeaten(beaten);
+    addPanel(this, 490, 306, 440, 84, champion);
+    this.add.text(506, 314, 'BADGES', mono(18, COLORS.gold));
+    const done = RIVALS.filter((r) => beaten.includes(r.id)).length;
+    this.add
+      .text(914, 316, champion ? '★ 100M MEET CHAMPION' : `RIVALS BEATEN ${done} OF ${RIVALS.length}`, mono(15, champion ? COLORS.gold : COLORS.white))
+      .setOrigin(1, 0);
+    // One pip per rival, slowest to fastest, in its kit colour once beaten.
+    RIVALS.forEach((r, i) => {
+      const x = 512 + i * 52;
+      const won = beaten.includes(r.id);
+      this.add.rectangle(x, 346, 44, 16, won ? r.tint : 0x2a1458).setOrigin(0, 0).setStrokeStyle(2, won ? 0xffffff : 0x5b3aa6);
+      this.add.text(x + 22, 372, r.name.replace('THE ', ''), mono(9, won ? COLORS.white : COLORS.dim)).setOrigin(0.5);
+    });
+
+    // Right, below: weekly medals.
+    addPanel(this, 490, 400, 440, 44, false);
+    this.add.text(506, 408, 'WEEKLY MEDALS', mono(15, COLORS.gold));
+    this.add.text(914, 408, 'GOLD 0   SILVER 0   BRONZE 0', mono(14, COLORS.white)).setOrigin(1, 0);
+    this.add.text(506, 426, 'Awarded once online leaderboards open.', mono(11, COLORS.dim));
 
     this.add.text(GAME_W / 2, 472, 'Other distances appear here as they are built.', mono(13, COLORS.dim)).setOrigin(0.5);
     addFooter(this, 'ESC or ENTER  BACK');
