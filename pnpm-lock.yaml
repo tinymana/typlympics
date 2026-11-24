@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: ^26.6.7
         version: 26.6.7
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.2
       playwright-core:
         specifier: ^1.65.1
         version: 1.65.1
