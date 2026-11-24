@@ -2,6 +2,53 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.5",
+      "date": "2026-11-24",
+      "title": "The main menu, rivals and your career",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Main menu: Train, Compete, Career and World Records. Up and down arrows to choose, Enter to go."
+        },
+        {
+          "tag": "new",
+          "text": "Train: pick a distance, then race. The 100m is open; the 200m, 400m, 800m and 1500m are listed and on the way."
+        },
+        {
+          "tag": "new",
+          "text": "Rivals: after picking a distance, race one of ten opponents, from Terry Shellman the Turtle (under 25 words a minute) to The Peregrine (110 and up). Each one unlocks when you beat the one before."
+        },
+        {
+          "tag": "new",
+          "text": "Rivals play by your rules: they type the same line, make mistakes and stumble like you do. Beat all ten to earn the Meet Champion badge on your career page."
+        },
+        {
+          "tag": "new",
+          "text": "Every rival has a portrait, shown when you choose who to race and when the result comes in."
+        },
+        {
+          "tag": "new",
+          "text": "Time trial is still there: race the ghost of your own best run."
+        },
+        {
+          "tag": "new",
+          "text": "Career page: your best time and words per minute, recent averages, accuracy, reaction time, clean races, false starts and your recent races."
+        },
+        {
+          "tag": "new",
+          "text": "Every finished race is now kept in your history, so your career figures build as you play."
+        },
+        {
+          "tag": "new",
+          "text": "Compete and World Records show what is coming: hosted races for up to four athletes that you join with a room PIN, and all-time leaderboards."
+        },
+        {
+          "tag": "improved",
+          "text": "New start-screen art, with the menu now live on top of it."
+        }
+      ]
+    },
+    {
       "version": "0.4",
       "date": "2026-11-24",
       "title": "Sign in and the real start screen",

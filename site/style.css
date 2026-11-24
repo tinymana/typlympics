@@ -90,6 +90,16 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 40px; }
 .feature h3 { margin: 14px 0 4px; font-family: var(--head); font-weight: 400; font-size: 32px; line-height: 1.05; text-transform: uppercase; color: var(--gold-2); text-shadow: 2px 2px 0 var(--ink); }
 .feature p { margin: 0; color: #ece4ff; }
 
+/* Rivals */
+.rival-grid { list-style: none; margin: 0; padding: 18px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px 14px; }
+.rival { position: relative; text-align: center; }
+.rival img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 8px; border: 3px solid var(--ink); background: radial-gradient(circle at 50% 35%, var(--line), var(--panel-2) 70%); }
+.rival-num { position: absolute; top: 6px; left: 6px; padding: 0 7px; border-radius: 5px; font-family: var(--head); font-size: 18px; color: #2a1a02; background: linear-gradient(180deg, #ffe680, #ff9a3c); border: 2px solid var(--ink); }
+.rival h3 { margin: 8px 0 0; font-family: var(--head); font-weight: 400; font-size: 24px; line-height: 1.05; text-transform: uppercase; text-shadow: 2px 2px 0 var(--ink); }
+.rival p { margin: 0; }
+.rival-nick { color: var(--gold-2); text-transform: uppercase; }
+.rival-wpm { color: var(--muted); }
+
 /* Roadmap */
 .road { list-style: none; margin: 0; padding: 8px 20px; display: flex; flex-direction: column; }
 .road li { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: start; padding: 14px 0; border-bottom: 2px dashed var(--line); }
@@ -131,6 +141,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 40px; }
   .section-title { font-size: 40px; }
   .btn.big { font-size: 26px; padding: 12px 22px 10px; }
   .road li { grid-template-columns: 76px 1fr; gap: 12px; }
+  .rival-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

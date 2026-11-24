@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from './render/layout';
 import { LoginScene } from './render/LoginScene';
+import { CareerScene, CompeteScene, EventSelectScene, RecordsScene, RivalSelectScene } from './render/MenuScenes';
 import { RaceScene } from './render/RaceScene';
 import { TitleScene } from './render/TitleScene';
 
@@ -13,7 +14,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [LoginScene, TitleScene, RaceScene],
+  scene: [LoginScene, TitleScene, EventSelectScene, RivalSelectScene, CareerScene, CompeteScene, RecordsScene, RaceScene],
 });
 
 // Clicking the game gives it keyboard focus when embedded in another page.

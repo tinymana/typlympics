@@ -46,6 +46,15 @@ try {
   const typeText = async (text) => {
     for (const ch of text) await page.keyboard.press(ch === ' ' ? 'Space' : ch);
   };
+  /** On the opponent screen, moves to the top row (time trial) and starts. */
+  const pickTimeTrial = async () => {
+    for (let i = 0; i < 9; i++) {
+      const sel = await page.evaluate(() => window.__typlympics.scene.getScene('rivals').selected);
+      if (sel === 0) break;
+      await page.keyboard.press('ArrowUp');
+    }
+    await page.keyboard.press('Enter');
+  };
   const TEST_PIN = '4821';
   await scene('login');
   await sleep(300);
@@ -107,7 +116,16 @@ try {
 
   // Race 1: clean, moderate pace.
   const startRematch = Date.now();
+  // Title menu: Train is selected by default; then pick the 100m.
   await page.keyboard.press('Enter');
+  await scene('events');
+  await sleep(250);
+  await page.screenshot({ path: join(outDir, '1b-train.png') });
+  await page.keyboard.press('Enter');
+  await scene('rivals');
+  await sleep(250);
+  await page.screenshot({ path: join(outDir, '1c-rivals.png') });
+  await pickTimeTrial();
   await waitPhase('marks');
   await sleep(300);
   await page.screenshot({ path: join(outDir, '2-marks.png') });
@@ -148,15 +166,66 @@ try {
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')));
   const best = Math.min(r1.timeMs, r3.timeMs);
   const me = stored.profiles['smoke-test'];
-  check('save has version 2 and the athlete\'s best time with its log', stored.saveVersion === 2 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
+  check('save has version 4 and the athlete\'s best time with its log', stored.saveVersion === 4 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
   check('save counts races', me.totals.races === 3 && me.totals.finishes === 3, JSON.stringify(me.totals));
+  check('race history has one entry per finished race', me.history.length === 3, `${me.history.length}`);
   await page.reload();
   await page.waitForFunction(() => window.__typlympics?.scene?.isActive('title'));
   await sleep(300);
   await page.screenshot({ path: join(outDir, '7-title-with-pb.png') });
 
-  // Frame rate while racing.
+  // Menu: Career, Compete and World Records open and return to the title.
+  // The title remembers the last row chosen, so each step moves relative to it.
+  // Rows: 0 Train, 1 Compete, 2 Career, 3 World Records. Start on 0.
+  let row = 0;
+  for (const [target, key] of [[2, 'career'], [1, 'compete'], [3, 'records']]) {
+    while (row !== target) {
+      await page.keyboard.press('ArrowDown');
+      row = (row + 1) % 4;
+    }
+    await sleep(150);
+    if (key === 'compete') await page.screenshot({ path: join(outDir, '7b-menu-compete-selected.png') });
+    await page.keyboard.press('Enter');
+    await scene(key);
+    await sleep(250);
+    await page.screenshot({ path: join(outDir, `9-${key}.png`) });
+    await page.keyboard.press('Escape');
+    await scene('title');
+    await sleep(100);
+  }
+  check('career, compete and world records screens open from the menu', true);
+  while (row !== 0) {
+    await page.keyboard.press('ArrowDown');
+    row = (row + 1) % 4;
+  }
+
+  // Rivals: race the slowest rival, win, and see the win recorded.
   await page.keyboard.press('Enter');
+  await scene('events');
+  await page.keyboard.press('Enter');
+  await scene('rivals');
+  const startRow = await page.evaluate(() => {
+    const s = window.__typlympics.scene.getScene('rivals');
+    return s.rows[s.selected].rivalId;
+  });
+  check('the opponent screen starts on the next rival to beat', startRow === 'turtle', startRow);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  check('a locked rival cannot be raced', await page.evaluate(() => window.__typlympics.scene.isActive('rivals')));
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  const rr = await runRace({ gapMs: 45 });
+  await page.screenshot({ path: join(outDir, '10-rival-result.png') });
+  const afterRival = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles['smoke-test']);
+  check('beating a rival is recorded for the athlete', rr.finished && afterRival.rivalsBeaten['100m@1']?.includes('turtle'), JSON.stringify(afterRival.rivalsBeaten));
+  await page.keyboard.press('Escape');
+  await scene('rivals');
+  await sleep(200);
+  await page.screenshot({ path: join(outDir, '11-rivals-after-win.png') });
+
+  // Frame rate while racing.
+  await pickTimeTrial();
   await waitPhase('race');
   const fps = await page.evaluate(() => window.__typlympics.loop.actualFps);
   check('frame rate is near 60', fps > 50, `${fps.toFixed(1)} fps`);

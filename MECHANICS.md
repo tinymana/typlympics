@@ -36,3 +36,35 @@ Text generator version 1: difficulty band 5.5 to 13.5 (about the 15th to
 - Is 200 ms the right stumble length?
 - Should the text appear at "On your marks" or only at the gun?
 - Are the medal times right for a first-session player?
+
+## Training rivals (Train mode)
+
+Status: **roster approved by the creative director on 2026-11-24** (names,
+nicknames, order and speed bands). Reaction times, error rates and rhythm
+are my tuning and can change without affecting the bands. Rivals are
+content, not rules: they type under ruleset `100m@1` like any player, and
+results against them never reach a leaderboard.
+
+| # | Name | Nickname | Speed band | Typed at | Reaction | Errors per key |
+| --- | --- | --- | --- | --- | --- | --- |
+| 01 | Terry Shellman | Turtle | Under 25 WPM | 18 to 24 | 0.44 s | 3.0% |
+| 02 | Sleepy Steve | Sloth | 25-34 WPM | 25 to 34 | 0.40 s | 2.7% |
+| 03 | Frostbite | Penguin | 35-44 WPM | 35 to 44 | 0.34 s | 2.2% |
+| 04 | Ricky Rapid | Rabbit | 45-54 WPM | 45 to 54 | 0.30 s | 2.0% |
+| 05 | The Sly Guy | Fox | 55-64 WPM | 55 to 64 | 0.27 s | 1.8% |
+| 06 | Wolfgang | Wolf | 65-74 WPM | 65 to 74 | 0.245 s | 1.5% |
+| 07 | King Leo | Lion | 75-84 WPM | 75 to 84 | 0.225 s | 1.3% |
+| 08 | Lightning Legs | Gazelle | 85-94 WPM | 85 to 94 | 0.205 s | 1.1% |
+| 09 | Speed Demon | Cheetah | 95-109 WPM | 95 to 109 | 0.185 s | 0.9% |
+| 10 | The Peregrine | Falcon | 110+ WPM | 110 to 125 | 0.16 s | 0.6% |
+
+- Each race, a rival types at a speed drawn from inside its band, so the same rival is a little quicker or slower from race to race.
+- Bands do not overlap, so a higher-numbered rival always beats a lower one on the same line.
+- A rival unlocks when the one before it is beaten. Nobody skips ahead (decided 2026-11-24).
+- A win means crossing the line first; a dead heat is not a win.
+- Beating all ten at a distance earns that distance's Meet Champion badge.
+
+## Online versus (Compete)
+
+- Maximum four athletes per race for now (decided 2026-11-24; replaces the earlier eight lanes).
+- Joining is by room PIN (decided 2026-11-24). A QR code is optional later.

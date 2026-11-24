@@ -5,6 +5,35 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (main menu and career)
+
+- Live main menu on the title screen: Train, Compete, Career, World
+  Records. The background is the menu-less start-screen art; the menu
+  frame and rows are cut from the art that has the menu, with a selected
+  and an unselected state derived for each row.
+- Train: distance select. The 100m is playable; 200m, 400m, 800m and 1500m
+  are listed as coming soon.
+- Career page from local data: best time and WPM, averages over the last
+  20 races, accuracy, reaction, clean races, false starts, trend, recent
+  races, and a weekly medals panel that fills once online boards exist.
+- Save version 3: each athlete keeps a history of finished races (latest
+  200). Version 2 saves migrate with an empty history.
+- Compete and World Records screens describing the planned flow.
+- Training rivals: the creative director's roster of ten, from Terry
+  Shellman the Turtle (under 25 WPM) to The Peregrine (110+ WPM), each
+  racing at a speed inside its band, in `packages/content/src/rivals.ts`.
+  Portraits appear on the opponent screen (silhouetted while locked) and
+  on the result panel, and in a "Meet the rivals" section on the website. A rival's keystroke log is
+  generated from its speed, rhythm and error rate and run through the same
+  simulation as the player's. Rivals unlock in order; Enter after a win
+  faces the next one.
+- Opponent select after the distance: time trial against your own best,
+  or the rival ladder.
+- Meet Champion badge and rival progress on the career page.
+- Save version 4: rivals beaten per event. Version 3 saves migrate.
+- 82 tests; the smoke test walks the menu, opens every screen and beats
+  a rival.
+
 ### Added (sign-in and start screen)
 
 - Athlete sign-in scene: name, nationality (70 countries, arrows or
