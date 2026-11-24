@@ -1,4 +1,6 @@
-# Builds the game and publishes it to GitHub Pages on every push to main.
+# Builds the game and the website around it, and publishes both to GitHub
+# Pages on every push to main. The landing page is served at the site root
+# and the game at /play/.
 # One-time setup: repository Settings > Pages > Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 
@@ -29,11 +31,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
+      - run: pnpm site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/client/dist
+          path: _site
 
   deploy:
     needs: build

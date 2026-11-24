@@ -5,8 +5,33 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+Milestone 2 work: typing measurement and athlete animation.
+
 ### Added
 
+- Drive phase out of the blocks (low torso for the first 5 m), finish dip,
+  dust at the feet on every stride, and speed lines after 15 clean keys in
+  a row. Speed lines are presentation only and never affect the race.
+- Photo finish: a finish within 0.10 s of the personal best is announced
+  and the margin is shown to the millisecond.
+- Layout tests: a full sprint line is typed and finished on QWERTY, Dvorak,
+  Colemak, AZERTY and QWERTZ, and sprint text is checked to need no
+  shifted, dead or AltGr keys on any of them.
+- Smoke test now checks that key repeat, composition, shortcut chords and
+  paste cannot advance the athlete, and that logged key times match the
+  browser's event timestamps within 1 ms.
+
+### Still open for milestone 2
+
+- Measurement check in Firefox and Safari (only Chrome is automated).
+- Photo finish between live opponents arrives with multiplayer; for now it
+  compares against the personal-best ghost.
+
+### Added (website)
+
+- Public landing page in `site/` with in-page play, feature tour, roadmap
+  and dev notes read from `site/devnotes.json`. `pnpm site` assembles it
+  with the game under `play/`.
 - GitHub Actions workflow that tests, builds and deploys the game to GitHub Pages on every push to `main`.
 
 ## [0.1.0] - 2026-11-24 - Milestone 1, checkpoint 1
