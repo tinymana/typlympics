@@ -1,0 +1,10 @@
+{
+  "name": "@typlympics/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure, deterministic race simulation and scoring. No dependencies, no DOM, no clock.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

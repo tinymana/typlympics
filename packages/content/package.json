@@ -1,0 +1,10 @@
+{
+  "name": "@typlympics/content",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Seeded challenge generation: PRNG, word lists, sprint lines and their difficulty band.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
