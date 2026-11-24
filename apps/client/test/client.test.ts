@@ -201,7 +201,7 @@ describe('versioned save', () => {
 
   it('migrates a version 0 save and drops its unverifiable time', () => {
     const save = parseSave(JSON.stringify({ pb100m: 9876, volume: 0.3, races: 12 }));
-    expect(save.saveVersion).toBe(4);
+    expect(save.saveVersion).toBe(5);
     expect(save.settings.volume).toBe(0.3);
     expect(save.profiles[GUEST_ID]?.totals.races).toBe(12);
     expect(save.profiles[GUEST_ID]?.records).toEqual({});
@@ -211,7 +211,7 @@ describe('versioned save', () => {
     const rec = makeRecord();
     const v1 = { saveVersion: 1, settings: { volume: 0.5 }, records: { [R.id]: rec }, totals: { races: 9, finishes: 8 } };
     const save = parseSave(JSON.stringify(v1));
-    expect(save.saveVersion).toBe(4);
+    expect(save.saveVersion).toBe(5);
     expect(save.activeProfileId).toBeNull();
     const guest = save.profiles[GUEST_ID];
     expect(guest?.records[R.id]).toEqual(rec);
@@ -229,7 +229,7 @@ describe('versioned save', () => {
     v2.saveVersion = 2;
     delete v2.profiles.ryan.history;
     const save = parseSave(JSON.stringify(v2));
-    expect(save.saveVersion).toBe(4);
+    expect(save.saveVersion).toBe(5);
     const ryan = save.profiles['ryan'];
     expect(ryan?.history).toEqual([]);
     expect(ryan?.records[R.id]).toBeDefined();
@@ -381,6 +381,26 @@ describe('rivals beaten', () => {
     const bad = JSON.parse(serializeSave(saveWithAthlete()));
     bad.profiles.ryan.rivalsBeaten = { [R.id]: ['turtle', 7, 'turtle'], other: 'nope' };
     expect(parseSave(JSON.stringify(bad)).profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['turtle'] });
+  });
+});
+
+describe('online session', () => {
+  it('starts signed out, survives a round trip, and is dropped if malformed', () => {
+    const save = saveWithAthlete();
+    expect(save.profiles['ryan']?.online).toBeNull();
+    (save.profiles['ryan'] as NonNullable<(typeof save.profiles)[string]>).online = { token: 'abc', athleteId: 'id-1' };
+    expect(parseSave(serializeSave(save)).profiles['ryan']?.online).toEqual({ token: 'abc', athleteId: 'id-1' });
+    const bad = JSON.parse(serializeSave(save));
+    bad.profiles.ryan.online = { token: 42 };
+    expect(parseSave(JSON.stringify(bad)).profiles['ryan']?.online).toBeNull();
+  });
+  it('migrates a version 4 save signed out', () => {
+    const v4 = JSON.parse(serializeSave(saveWithAthlete()));
+    v4.saveVersion = 4;
+    delete v4.profiles.ryan.online;
+    const parsed = parseSave(JSON.stringify(v4));
+    expect(parsed.saveVersion).toBe(5);
+    expect(parsed.profiles['ryan']?.online).toBeNull();
   });
 });
 

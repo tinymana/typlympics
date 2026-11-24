@@ -6,11 +6,12 @@ import { simulate, type InputEvent, type SprintRuleset } from '@typlympics/sim';
  *
  * Version 2 added athlete profiles (name, nationality, PIN), each with its
  * own records. Version 3 added each athlete's race history for the career page. Version 4
- * adds the training rivals each athlete has beaten. Every stored record keeps its keystroke log: the time is
+ * added the training rivals each athlete has beaten. Version 5 adds the
+ * athlete's online session, once they have signed in to compete. Every stored record keeps its keystroke log: the time is
  * re-derived from the log on load, never trusted as stored.
  */
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const SAVE_KEY = 'typlympics.save';
 
 export const NAME_MAX = 12;
@@ -67,10 +68,12 @@ export interface Profile {
   history: RaceSummary[];
   /** Ids of training rivals beaten, per ruleset id. */
   rivalsBeaten: Record<string, string[]>;
+  /** Online session, set after signing in to compete. The PIN is never stored. */
+  online: { token: string; athleteId: string } | null;
 }
 
 export interface Save {
-  saveVersion: 4;
+  saveVersion: 5;
   settings: { volume: number };
   /** The athlete currently signed in on this device, if any. */
   activeProfileId: string | null;
@@ -78,7 +81,7 @@ export interface Save {
 }
 
 export function defaultSave(): Save {
-  return { saveVersion: 4, settings: { volume: 0.6 }, activeProfileId: null, profiles: {} };
+  return { saveVersion: 5, settings: { volume: 0.6 }, activeProfileId: null, profiles: {} };
 }
 
 // ------------------------------------------------------------ profiles
@@ -161,6 +164,7 @@ export function createProfile(save: Save, input: NewProfile, nowIso: string, sal
     totals: { races: 0, finishes: 0 },
     history: [],
     rivalsBeaten: {},
+    online: null,
   };
   save.profiles[id] = profile;
   return profile;
@@ -181,6 +185,7 @@ export function ensureGuest(save: Save, nowIso: string): Profile {
     totals: { races: 0, finishes: 0 },
     history: [],
     rivalsBeaten: {},
+    online: null,
   };
   save.profiles[GUEST_ID] = guest;
   return guest;
@@ -276,6 +281,8 @@ const MIGRATIONS: Record<number, Migration> = {
   2: (old) => ({ ...old, saveVersion: 3 }),
   // Version 3 had no rivals. Profiles gain an empty list when parsed.
   3: (old) => ({ ...old, saveVersion: 4 }),
+  // Version 4 had no online session. Profiles start signed out.
+  4: (old) => ({ ...old, saveVersion: 5 }),
 };
 
 function isValidSummary(v: unknown): v is RaceSummary {
@@ -316,6 +323,11 @@ function parseRivals(v: unknown): Record<string, string[]> {
   return out;
 }
 
+function parseOnline(v: unknown): { token: string; athleteId: string } | null {
+  if (!isObject(v) || typeof v['token'] !== 'string' || typeof v['athleteId'] !== 'string') return null;
+  return { token: v['token'], athleteId: v['athleteId'] };
+}
+
 function parseProfile(id: string, v: unknown): Profile | null {
   if (!isObject(v)) return null;
   const name = typeof v['name'] === 'string' ? normalizeName(v['name']) : '';
@@ -344,6 +356,7 @@ function parseProfile(id: string, v: unknown): Profile | null {
     },
     history: (Array.isArray(v['history']) ? v['history'] : []).filter(isValidSummary).slice(-HISTORY_MAX),
     rivalsBeaten: parseRivals(v['rivalsBeaten']),
+    online: parseOnline(v['online']),
   };
 }
 
@@ -372,7 +385,7 @@ export function parseSave(raw: string | null): Save {
   const settings = isObject(current['settings']) ? current['settings'] : {};
   const volume = typeof settings['volume'] === 'number' ? settings['volume'] : base.settings.volume;
   const out: Save = {
-    saveVersion: 4,
+    saveVersion: 5,
     settings: { volume: Math.min(1, Math.max(0, volume)) },
     activeProfileId: null,
     profiles: {},

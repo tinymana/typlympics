@@ -32,6 +32,16 @@ pnpm dev        # http://localhost:5173
 
 `pnpm smoke` needs Chrome or Chromium; set `CHROME_PATH` if it is not at `/usr/bin/google-chrome`.
 
+## Online
+
+Compete and World Records talk to one Supabase Edge Function, `typlympics`, backed by a `typlympics` schema in the studio's Supabase project.
+
+- `supabase/migrations/` holds the schema. `supabase/functions/typlympics/index.ts` is the function's source.
+- `pnpm bundle:function` bundles the function with `packages/sim` and `packages/content` into `supabase/functions/typlympics/dist/index.js`. The deployed function is a one-line stub that imports that bundle from this repository at a fixed commit, so what runs is what is committed.
+- To release a change: edit the source, run `pnpm bundle:function`, commit and push, then redeploy the stub pointing at the new commit.
+- The client never sends a time or a place. It submits its keystroke log and the server replies with the result it computed.
+- The function URL is in `apps/client/src/net/online.ts`. No API key is needed in the client; the function does its own sign-in.
+
 ## Website and dev notes
 
 `site/` is the public landing page: a hero, "Play here" in the page, a feature tour, the roadmap and the dev notes. The game itself is served under `play/`.
@@ -51,7 +61,8 @@ apps/client        Phaser 4 + Vite game client.
   src/audio        Synthesised sound effects.
   src/storage      Versioned local save with migrations.
 site               Public landing page and dev notes (devnotes.json).
-tools              Text difficulty analysis, browser smoke test, site assembly.
+supabase           Database migrations and the online Edge Function.
+tools              Text difficulty analysis, browser smoke test, stand-in server, site assembly.
 ```
 
 ## The one rule everything rests on

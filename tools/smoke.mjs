@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
+import { createMockServer } from './mock-online.mjs';
 
 const outDir = process.argv[2] ?? 'smoke-out';
 mkdirSync(outDir, { recursive: true });
@@ -33,11 +34,22 @@ try {
     executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome',
     args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'],
   });
-  const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+  // The online API is answered by an in-memory stand-in, so the Compete
+  // screens can be driven without a network.
+  const mock = createMockServer();
+  const withMock = async (p) => {
+    await p.route('**/functions/v1/typlympics', async (route) => {
+      const answer = mock.handle(route.request().postDataJSON());
+      await route.fulfill({ status: answer.status, contentType: 'application/json', body: JSON.stringify(answer.json) });
+    });
+    return p;
+  };
+  const page = await withMock(await browser.newPage({ viewport: { width: 960, height: 540 } }));
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    // Expected refusals (a wrong PIN) show up as 4xx resource errors.
+    if (m.type() === 'error' && !/status of 40[0-9]/.test(m.text())) errors.push(m.text());
   });
   await page.goto(`http://localhost:${PORT}/`);
 
@@ -174,7 +186,7 @@ try {
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')));
   const best = Math.min(r1.timeMs, r3.timeMs);
   const me = stored.profiles['smoke-test'];
-  check('save has version 4 and the athlete\'s best time with its log', stored.saveVersion === 4 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
+  check('save has version 5 and the athlete\'s best time with its log', stored.saveVersion === 5 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
   check('save counts races', me.totals.races === 3 && me.totals.finishes === 3, JSON.stringify(me.totals));
   check('race history has one entry per finished race', me.history.length === 3, `${me.history.length}`);
   await page.reload();
@@ -288,6 +300,110 @@ try {
   check('logged key times are within 1 ms of the event timestamps', m.worst <= 1 && m.pos === 20, `worst ${m.worst} ms`);
   await sleep(250);
   await page.screenshot({ path: join(outDir, '8-drive-phase.png') });
+
+  // ---------------------------------------------------------- online: two athletes
+  const sceneOn = (p, key) => p.waitForFunction((k) => window.__typlympics?.scene?.isActive(k), key, { timeout: 8000 });
+  const typeOn = async (p, text) => {
+    for (const ch of text) await p.keyboard.press(ch === ' ' ? 'Space' : ch);
+  };
+  /** A fresh browser profile: sign up locally, then go online with the same PIN. */
+  const newAthlete = async (name, pin) => {
+    const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
+    const p = await withMock(await ctx.newPage());
+    p.on('pageerror', (e) => errors.push(String(e)));
+    p.on('console', (m) => {
+      if (m.type() === 'error' && !/status of 40[0-9]/.test(m.text())) errors.push(m.text());
+    });
+    await p.goto(`http://localhost:${PORT}/`);
+    await sceneOn(p, 'login');
+    await sleep(200);
+    await typeOn(p, name);
+    await p.keyboard.press('Enter');
+    await p.keyboard.press('Enter');
+    await typeOn(p, pin);
+    await p.keyboard.press('Enter');
+    await sceneOn(p, 'title');
+    await p.keyboard.press('ArrowDown'); // Compete
+    await p.keyboard.press('Enter');
+    await sceneOn(p, 'compete');
+    await sleep(150);
+    await typeOn(p, pin);
+    await p.keyboard.press('Enter');
+    await p.waitForFunction(() => window.__typlympics.scene.getScene('compete').step === 'menu', null, { timeout: 8000 });
+    return p;
+  };
+  const hostPage = await newAthlete('host one', '1111');
+  const guestPage = await newAthlete('guest two', '2222');
+  await hostPage.screenshot({ path: join(outDir, '20-compete-menu.png') });
+
+  await hostPage.keyboard.press('Enter'); // Host a race
+  await hostPage.keyboard.press('Enter'); // 100 M
+  await sceneOn(hostPage, 'lobby');
+  const roomPin = await hostPage.evaluate(() => window.__typlympics.scene.getScene('lobby').pin);
+  check('hosting opens a room with a five-digit PIN', /^[0-9]{5}$/.test(roomPin), roomPin);
+
+  await guestPage.keyboard.press('ArrowDown'); // Join a race
+  await guestPage.keyboard.press('Enter');
+  await typeOn(guestPage, '00000');
+  await guestPage.keyboard.press('Enter');
+  await sleep(300);
+  check('a wrong room PIN is refused', await guestPage.evaluate(() => window.__typlympics.scene.isActive('compete')));
+  await typeOn(guestPage, roomPin);
+  await guestPage.keyboard.press('Enter');
+  await sceneOn(guestPage, 'lobby');
+  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('lobby').room?.members.length === 2, null, { timeout: 8000 });
+  await sleep(200);
+  await hostPage.screenshot({ path: join(outDir, '21-lobby-host.png') });
+  check('the host sees both athletes in the room', true);
+
+  await guestPage.keyboard.press('Enter'); // not the host: must do nothing
+  await sleep(300);
+  check('only the host can start', await guestPage.evaluate(() => window.__typlympics.scene.isActive('lobby')));
+  await hostPage.keyboard.press('Enter');
+  const racePhase = (p, phase) => p.waitForFunction((ph) => window.__typlympics.scene.isActive('race') && window.__typlympics.scene.getScene('race').phase === ph, phase, { timeout: 15000 });
+  await Promise.all([racePhase(hostPage, 'race'), racePhase(guestPage, 'race')]);
+  const [textA, textB] = await Promise.all([hostPage, guestPage].map((p) => p.evaluate(() => window.__typlympics.scene.getScene('race').line.text)));
+  check('both athletes get the same line from the server seed', textA === textB && textA.length === 100);
+  const typeRace = async (p, gap) => {
+    await sleep(170);
+    for (let i = 0; i < textA.length; i++) {
+      await p.keyboard.press(textA[i] === ' ' ? 'Space' : textA[i]);
+      if (p === hostPage && i === 60) await p.screenshot({ path: join(outDir, '22-online-race.png') });
+      await sleep(gap);
+    }
+  };
+  await Promise.all([typeRace(hostPage, 35), typeRace(guestPage, 60)]);
+  const standingsDone = (p) => p.waitForFunction(() => window.__typlympics.scene.getScene('race').standingsDone === true, null, { timeout: 15000 });
+  await Promise.all([standingsDone(hostPage), standingsDone(guestPage)]);
+  await sleep(500);
+  await hostPage.screenshot({ path: join(outDir, '23-online-result-host.png') });
+  await guestPage.screenshot({ path: join(outDir, '24-online-result-guest.png') });
+  const headline = (p) => p.evaluate(() => window.__typlympics.scene.getScene('race').panelText.headline.text);
+  const [headA, headB] = await Promise.all([headline(hostPage), headline(guestPage)]);
+  check('the faster athlete is placed first and the slower second', headA.startsWith('1ST PLACE') && headB.startsWith('2ND PLACE'), `${headA} / ${headB}`);
+  const serverRace = [...mock.state.races.values()][0];
+  const serverTimes = [...serverRace.entries.values()].map((e) => e.timeMs);
+  const localOfficial = await hostPage.evaluate(() => window.__typlympics.scene.getScene('race').official.timeMs);
+  check('times come from the server, computed from the keystroke logs', serverTimes.every((t) => t > 0) && serverTimes.includes(localOfficial), serverTimes.join(', '));
+  check('the guest saw the host move during the race', await guestPage.evaluate(() => window.__typlympics.scene.getScene('race').opponents[0].pos === 100));
+
+  await hostPage.keyboard.press('Enter');
+  await sceneOn(hostPage, 'lobby');
+  await sleep(1300);
+  check('after the race the host is back in the room, not thrown into the old race', await hostPage.evaluate(() => window.__typlympics.scene.isActive('lobby')));
+  await hostPage.keyboard.press('Escape');
+  await sceneOn(hostPage, 'compete');
+  await hostPage.keyboard.press('Escape');
+  await sceneOn(hostPage, 'title');
+  await hostPage.keyboard.press('ArrowDown');
+  await hostPage.keyboard.press('ArrowDown');
+  await hostPage.keyboard.press('Enter');
+  await sceneOn(hostPage, 'records');
+  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').board !== null, null, { timeout: 8000 });
+  await sleep(200);
+  await hostPage.screenshot({ path: join(outDir, '25-world-records.png') });
+  const board = await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').board.boards['100m@1']);
+  check('World Records lists both athletes, fastest first', board.length === 2 && board[0].name === 'HOST ONE' && board[0].timeMs < board[1].timeMs);
 
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   void startRematch;

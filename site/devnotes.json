@@ -2,6 +2,33 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.7",
+      "date": "2026-11-24",
+      "title": "Compete online and World Records",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Compete: host a race and share the five-digit room PIN, or join a friend's. Up to four athletes start on the same gun."
+        },
+        {
+          "tag": "new",
+          "text": "The host picks the distance and can change it between races. Everyone stays in the room for the next one."
+        },
+        {
+          "tag": "new",
+          "text": "Results are worked out by the server from each athlete's keystrokes, so a time cannot simply be claimed."
+        },
+        {
+          "tag": "new",
+          "text": "World Records: the fastest times ever at each distance, the top typing speeds and the most race wins, from online races."
+        },
+        {
+          "tag": "new",
+          "text": "Going online uses the same name, nationality and PIN as your athlete, and the same PIN signs you in from any computer."
+        }
+      ]
+    },
+    {
       "version": "0.6",
       "date": "2026-11-24",
       "title": "All five distances",

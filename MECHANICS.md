@@ -88,5 +88,20 @@ results against them never reach a leaderboard.
 
 ## Online versus (Compete)
 
-- Maximum four athletes per race for now (decided 2026-11-24; replaces the earlier eight lanes).
-- Joining is by room PIN (decided 2026-11-24). A QR code is optional later.
+Decided by the creative director on 2026-11-24: up to four athletes per
+race, joined by room PIN, results recorded to the all-time leaderboard for
+the distance. The rest is my implementation and open to change.
+
+| Rule | Value |
+| --- | --- |
+| Athletes per race | Up to 4 |
+| Joining | Five-digit room PIN shown to the host |
+| Distance | Chosen by the host; can change between races |
+| Start | Server sets the gun about 6 to 7.5 s after the host starts |
+| Rules in the race | The distance's own ruleset, unchanged |
+| Result | Computed on the server from the keystroke log; accepted once |
+| Place | Order of official times among finishers |
+| Leaderboard | Best official time per athlete per distance |
+| Held for review | Finish more than 8 s before its log arrived, or over 300 WPM; not listed |
+| Did not finish | Leaving mid-race, or not finishing within the time limit |
+| Online identity | Athlete name (unique), nationality and four-digit PIN; five wrong PINs lock the name for 15 minutes |
