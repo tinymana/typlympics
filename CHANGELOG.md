@@ -5,6 +5,10 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Actions workflow that tests, builds and deploys the game to GitHub Pages on every push to `main`.
+
 ## [0.1.0] - 2026-11-24 - Milestone 1, checkpoint 1
 
 First playable build: single-player 100m sprint.

@@ -31,6 +31,10 @@ pnpm dev        # http://localhost:5173
 
 `pnpm smoke` needs Chrome or Chromium; set `CHROME_PATH` if it is not at `/usr/bin/google-chrome`.
 
+## Hosting on GitHub Pages
+
+`.github/workflows/pages.yml` type-checks, tests, builds and publishes the game on every push to `main`. One-time setup: in the repository on GitHub, open Settings, then Pages, and set Source to "GitHub Actions". The game is then served at `https://<owner>.github.io/typlympics/`.
+
 ## Layout
 
 ```
