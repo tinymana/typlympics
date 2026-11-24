@@ -364,13 +364,13 @@ describe('rivals beaten', () => {
     const save = saveWithAthlete();
     const ryan = save.profiles['ryan'] as NonNullable<(typeof save.profiles)[string]>;
     expect(rivalsBeatenFor(ryan, R.id)).toEqual([]);
-    expect(markRivalBeaten(ryan, R.id, 'snail')).toBe(true);
-    expect(markRivalBeaten(ryan, R.id, 'snail')).toBe(false);
-    expect(markRivalBeaten(ryan, R.id, 'tortoise')).toBe(true);
-    expect(rivalsBeatenFor(ryan, R.id)).toEqual(['snail', 'tortoise']);
+    expect(markRivalBeaten(ryan, R.id, 'turtle')).toBe(true);
+    expect(markRivalBeaten(ryan, R.id, 'turtle')).toBe(false);
+    expect(markRivalBeaten(ryan, R.id, 'sloth')).toBe(true);
+    expect(rivalsBeatenFor(ryan, R.id)).toEqual(['turtle', 'sloth']);
     expect(rivalsBeatenFor(ryan, '200m@1')).toEqual([]);
     const parsed = parseSave(serializeSave(save));
-    expect(parsed.profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['snail', 'tortoise'] });
+    expect(parsed.profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['turtle', 'sloth'] });
   });
 
   it('migrates a version 3 save with no rivals and cleans a malformed list', () => {
@@ -379,8 +379,8 @@ describe('rivals beaten', () => {
     delete v3.profiles.ryan.rivalsBeaten;
     expect(parseSave(JSON.stringify(v3)).profiles['ryan']?.rivalsBeaten).toEqual({});
     const bad = JSON.parse(serializeSave(saveWithAthlete()));
-    bad.profiles.ryan.rivalsBeaten = { [R.id]: ['snail', 7, 'snail'], other: 'nope' };
-    expect(parseSave(JSON.stringify(bad)).profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['snail'] });
+    bad.profiles.ryan.rivalsBeaten = { [R.id]: ['turtle', 7, 'turtle'], other: 'nope' };
+    expect(parseSave(JSON.stringify(bad)).profiles['ryan']?.rivalsBeaten).toEqual({ [R.id]: ['turtle'] });
   });
 });
 

@@ -13,20 +13,24 @@ import { SPRINT_100M_V1 as R, simulate } from '../packages/sim/src/index';
 describe('training rivals', () => {
   it('are ordered slowest to fastest with unique ids and names', () => {
     for (let i = 1; i < RIVALS.length; i++) {
-      expect((RIVALS[i] as (typeof RIVALS)[number]).wpm).toBeGreaterThan((RIVALS[i - 1] as (typeof RIVALS)[number]).wpm);
+      // Speed bands never overlap, so the order is the same in every race.
+      expect((RIVALS[i] as (typeof RIVALS)[number]).wpmMin).toBeGreaterThan((RIVALS[i - 1] as (typeof RIVALS)[number]).wpmMax);
     }
+    expect(RIVALS.map((r) => r.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(RIVALS.map((r) => r.nickname)).toEqual(['TURTLE', 'SLOTH', 'PENGUIN', 'RABBIT', 'FOX', 'WOLF', 'LION', 'GAZELLE', 'CHEETAH', 'FALCON']);
     expect(new Set(RIVALS.map((r) => r.id)).size).toBe(RIVALS.length);
     expect(new Set(RIVALS.map((r) => r.name)).size).toBe(RIVALS.length);
-    expect(RIVALS.length).toBe(8);
+    expect(RIVALS.length).toBe(10);
   });
 
   it('have legal reaction times, so a rival never false starts', () => {
     for (const r of RIVALS) expect(r.reactionMs).toBeGreaterThanOrEqual(R.minReactionMs);
   });
 
-  it('finish every race under the real rules, close to their advertised speed', () => {
+  it('finish every race under the real rules, at a speed inside their band', () => {
     for (const rival of RIVALS) {
-      const advertisedMs = (R.distance / 5 / rival.wpm) * 60000;
+      const slowestMs = (R.distance / 5 / rival.wpmMin) * 60000;
+      const fastestMs = (R.distance / 5 / rival.wpmMax) * 60000;
       for (let i = 0; i < 40; i++) {
         const seed = `race-${i}`;
         const text = generateSprintLine(seed).text;
@@ -35,23 +39,24 @@ describe('training rivals', () => {
         expect(res.falseStart).toBe(false);
         expect(res.ignored).toBe(0);
         const time = res.timeMs as number;
-        expect(time).toBeGreaterThan(advertisedMs * 0.97);
-        expect(time).toBeLessThan(advertisedMs * 1.03);
+        // Allow a few ms for rounding each key to a whole millisecond.
+        expect(time).toBeGreaterThanOrEqual(fastestMs - 5);
+        expect(time).toBeLessThanOrEqual(slowestMs + 5);
       }
     }
   });
 
   it('make mistakes at roughly their error rate, and pay for them', () => {
-    const snail = RIVALS[0] as (typeof RIVALS)[number];
+    const turtle = RIVALS[0] as (typeof RIVALS)[number];
     let errors = 0;
     const races = 200;
     for (let i = 0; i < races; i++) {
       const text = generateSprintLine(`err-${i}`).text;
-      errors += simulate(R, text, generateAiLog(snail, text, `err-${i}`, R.errorLockoutMs)).errors;
+      errors += simulate(R, text, generateAiLog(turtle, text, `err-${i}`, R.errorLockoutMs)).errors;
     }
     const perChar = errors / (races * 99);
-    expect(perChar).toBeGreaterThan(snail.errorRate * 0.6);
-    expect(perChar).toBeLessThan(snail.errorRate * 1.4);
+    expect(perChar).toBeGreaterThan(turtle.errorRate * 0.6);
+    expect(perChar).toBeLessThan(turtle.errorRate * 1.4);
   });
 
   it('a faster rival always beats a slower one on the same line', () => {
@@ -71,9 +76,9 @@ describe('training rivals', () => {
   });
 
   it('track progress up the ladder', () => {
-    expect(nextRival([])?.id).toBe('snail');
-    expect(nextRival(['snail', 'tortoise'])?.id).toBe('penguin');
-    expect(nextRival(['tortoise'])?.id).toBe('snail');
+    expect(nextRival([])?.id).toBe('turtle');
+    expect(nextRival(['turtle', 'sloth'])?.id).toBe('penguin');
+    expect(nextRival(['sloth'])?.id).toBe('turtle');
     const all = RIVALS.map((r) => r.id);
     expect(nextRival(all)).toBeNull();
     expect(allRivalsBeaten(all)).toBe(true);

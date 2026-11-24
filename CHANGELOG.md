@@ -19,8 +19,11 @@ All notable changes to this project are recorded here. The format follows
 - Save version 3: each athlete keeps a history of finished races (latest
   200). Version 2 saves migrate with an empty history.
 - Compete and World Records screens describing the planned flow.
-- Training rivals: eight computer athletes (Snail 20 WPM to Falcon 120
-  WPM) in `packages/content/src/rivals.ts`. A rival's keystroke log is
+- Training rivals: the creative director's roster of ten, from Terry
+  Shellman the Turtle (under 25 WPM) to The Peregrine (110+ WPM), each
+  racing at a speed inside its band, in `packages/content/src/rivals.ts`.
+  Portraits appear on the opponent screen (silhouetted while locked) and
+  on the result panel, and in a "Meet the rivals" section on the website. A rival's keystroke log is
   generated from its speed, rhythm and error rate and run through the same
   simulation as the player's. Rivals unlock in order; Enter after a win
   faces the next one.

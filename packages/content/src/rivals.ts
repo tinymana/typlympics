@@ -1,9 +1,10 @@
 import { createRng } from './prng';
 
 /**
- * Training rivals: computer athletes for Train mode, slowest to fastest.
- * Each is named for an animal that matches its pace. Beat all of them at
- * a distance to earn that distance's Meet Champion badge.
+ * Training rivals: the Typlympics opponent roster for Train mode, slowest
+ * to fastest. Names, nicknames and speed bands are the creative director's
+ * (roster of 2026-11-24). Beat all of them at a distance to earn that
+ * distance's Meet Champion badge.
  *
  * A rival does not get special treatment. It "types" a keystroke log that
  * is run through the same simulation as the player's, so it obeys the same
@@ -11,9 +12,16 @@ import { createRng } from './prng';
  */
 export interface Rival {
   readonly id: string;
+  /** Roster number, 1 to 10. */
+  readonly number: number;
   readonly name: string;
-  /** Typing speed the rival averages over a race, in words per minute. */
-  readonly wpm: number;
+  /** The animal the rival is known as, e.g. "Turtle". */
+  readonly nickname: string;
+  /** Speed band in words per minute. Each race is typed at a speed inside it. */
+  readonly wpmMin: number;
+  readonly wpmMax: number;
+  /** The band as shown to players, e.g. "25-34 WPM". */
+  readonly band: string;
   readonly reactionMs: number;
   /** Chance of a wrong key on any character. */
   readonly errorRate: number;
@@ -24,14 +32,16 @@ export interface Rival {
 }
 
 export const RIVALS: readonly Rival[] = Object.freeze([
-  { id: 'snail', name: 'THE SNAIL', wpm: 20, reactionMs: 420, errorRate: 0.03, jitter: 0.4, tint: 0xb9e08a },
-  { id: 'tortoise', name: 'THE TORTOISE', wpm: 30, reactionMs: 360, errorRate: 0.025, jitter: 0.35, tint: 0x7fd6a0 },
-  { id: 'penguin', name: 'THE PENGUIN', wpm: 40, reactionMs: 310, errorRate: 0.02, jitter: 0.32, tint: 0x8fd0ff },
-  { id: 'fox', name: 'THE FOX', wpm: 55, reactionMs: 270, errorRate: 0.018, jitter: 0.28, tint: 0xffa35c },
-  { id: 'hare', name: 'THE HARE', wpm: 70, reactionMs: 240, errorRate: 0.015, jitter: 0.26, tint: 0xf4d6a0 },
-  { id: 'gazelle', name: 'THE GAZELLE', wpm: 85, reactionMs: 210, errorRate: 0.012, jitter: 0.22, tint: 0xffd23f },
-  { id: 'cheetah', name: 'THE CHEETAH', wpm: 100, reactionMs: 185, errorRate: 0.01, jitter: 0.2, tint: 0xff7a5c },
-  { id: 'falcon', name: 'THE FALCON', wpm: 120, reactionMs: 160, errorRate: 0.006, jitter: 0.16, tint: 0xc9a0ff },
+  { id: 'turtle', number: 1, name: 'TERRY SHELLMAN', nickname: 'TURTLE', wpmMin: 18, wpmMax: 24, band: 'UNDER 25 WPM', reactionMs: 440, errorRate: 0.03, jitter: 0.4, tint: 0x8fd67a },
+  { id: 'sloth', number: 2, name: 'SLEEPY STEVE', nickname: 'SLOTH', wpmMin: 25, wpmMax: 34, band: '25-34 WPM', reactionMs: 400, errorRate: 0.027, jitter: 0.38, tint: 0xc9a27a },
+  { id: 'penguin', number: 3, name: 'FROSTBITE', nickname: 'PENGUIN', wpmMin: 35, wpmMax: 44, band: '35-44 WPM', reactionMs: 340, errorRate: 0.022, jitter: 0.33, tint: 0x8fd0ff },
+  { id: 'rabbit', number: 4, name: 'RICKY RAPID', nickname: 'RABBIT', wpmMin: 45, wpmMax: 54, band: '45-54 WPM', reactionMs: 300, errorRate: 0.02, jitter: 0.3, tint: 0xffc2d6 },
+  { id: 'fox', number: 5, name: 'THE SLY GUY', nickname: 'FOX', wpmMin: 55, wpmMax: 64, band: '55-64 WPM', reactionMs: 270, errorRate: 0.018, jitter: 0.28, tint: 0xffa35c },
+  { id: 'wolf', number: 6, name: 'WOLFGANG', nickname: 'WOLF', wpmMin: 65, wpmMax: 74, band: '65-74 WPM', reactionMs: 245, errorRate: 0.015, jitter: 0.26, tint: 0xb9b6d6 },
+  { id: 'lion', number: 7, name: 'KING LEO', nickname: 'LION', wpmMin: 75, wpmMax: 84, band: '75-84 WPM', reactionMs: 225, errorRate: 0.013, jitter: 0.23, tint: 0xffc24a },
+  { id: 'gazelle', number: 8, name: 'LIGHTNING LEGS', nickname: 'GAZELLE', wpmMin: 85, wpmMax: 94, band: '85-94 WPM', reactionMs: 205, errorRate: 0.011, jitter: 0.21, tint: 0xffe08a },
+  { id: 'cheetah', number: 9, name: 'SPEED DEMON', nickname: 'CHEETAH', wpmMin: 95, wpmMax: 109, band: '95-109 WPM', reactionMs: 185, errorRate: 0.009, jitter: 0.19, tint: 0xff9a5c },
+  { id: 'falcon', number: 10, name: 'THE PEREGRINE', nickname: 'FALCON', wpmMin: 110, wpmMax: 125, band: '110+ WPM', reactionMs: 160, errorRate: 0.006, jitter: 0.16, tint: 0xc9a0ff },
 ]);
 
 export function rivalById(id: string | null | undefined): Rival | null {
@@ -56,10 +66,10 @@ export interface AiKey {
 /**
  * Generates the keystroke log a rival types for a line of text.
  *
- * The rhythm is uneven by the rival's jitter, wrong keys happen at its
- * error rate, and the gaps are then scaled so the race takes the time its
- * words-per-minute figure promises, give or take 1.5% on the day. The same
- * rival, text and seed always produce the same log.
+ * Each race the rival picks a speed inside its band. The rhythm is uneven
+ * by its jitter, wrong keys happen at its error rate, and the gaps are then
+ * scaled so the whole race, stumbles included, takes the time that speed
+ * promises. The same rival, text and seed always produce the same log.
  *
  * @param lockoutMs the stumble lockout of the ruleset being raced; the
  *   rival waits it out before typing the right key after a mistake.
@@ -68,7 +78,8 @@ export function generateAiLog(rival: Rival, text: string, seed: string, lockoutM
   const n = text.length;
   if (n === 0) return [];
   const rng = createRng(`ai:${rival.id}:${seed}`);
-  const targetMs = (n / 5 / rival.wpm) * 60000 * (0.985 + rng.next() * 0.03);
+  const wpm = rival.wpmMin + rng.next() * (rival.wpmMax - rival.wpmMin);
+  const targetMs = (n / 5 / wpm) * 60000;
   const recoverMs = lockoutMs + 40;
 
   const gaps: number[] = [];

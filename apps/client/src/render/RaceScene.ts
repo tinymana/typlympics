@@ -57,6 +57,7 @@ import {
   WORLD_W,
   laneFeetY,
 } from './layout';
+import { portraitKey, preloadPortraits } from './portraits';
 import { ensureTextures } from './textures';
 
 type Phase = 'marks' | 'set' | 'race' | 'result';
@@ -161,6 +162,7 @@ export class RaceScene extends Phaser.Scene {
   private banner!: Phaser.GameObjects.Text;
   private panel!: Phaser.GameObjects.Container;
   private promptText!: Phaser.GameObjects.Text;
+  private rivalPortrait!: Phaser.GameObjects.Image;
   private panelText!: {
     headline: Phaser.GameObjects.Text;
     time: Phaser.GameObjects.Text;
@@ -177,6 +179,10 @@ export class RaceScene extends Phaser.Scene {
 
   init(data: { rival?: string | null }): void {
     this.rival = rivalById(data?.rival);
+  }
+
+  preload(): void {
+    preloadPortraits(this);
   }
 
   create(): void {
@@ -356,10 +362,11 @@ export class RaceScene extends Phaser.Scene {
     const splits = this.add.text(0, 88, '', mono(16, COLORS.dim)).setOrigin(0.5);
     const prompt = this.add.text(0, 126, 'ENTER or TAB: RACE AGAIN', mono(22, COLORS.pink)).setOrigin(0.5);
     this.promptText = prompt;
+    this.rivalPortrait = this.add.image(-268, -72, portraitKey('turtle')).setDisplaySize(88, 88).setVisible(false);
     const seed = this.add.text(0, 152, '', mono(11, '#5a4a80')).setOrigin(0.5);
     this.tweens.add({ targets: prompt, alpha: 0.35, duration: 480, yoyo: true, repeat: -1 });
 
-    this.panel = this.add.container(GAME_W / 2, 250, [bg, headline, time, delta, medal, stats, splits, prompt, seed]);
+    this.panel = this.add.container(GAME_W / 2, 250, [bg, headline, time, delta, medal, stats, splits, prompt, seed, this.rivalPortrait]);
     this.panel.setDepth(100).setScrollFactor(0, 0, true).setVisible(false);
     this.panelText = { headline, time, delta, medal, stats, splits, seed };
   }
@@ -412,6 +419,7 @@ export class RaceScene extends Phaser.Scene {
     this.pbText.setText(this.pbTimeMs !== null ? `PB ${formatTime(this.pbTimeMs)}` : 'PB --.--');
     this.panel.setVisible(false);
     this.promptText.setText('ENTER or TAB: RACE AGAIN');
+    this.rivalPortrait.setVisible(false);
     this.showBanner('ON YOUR MARKS', COLORS.white);
     this.sfx.marks();
   }
@@ -634,7 +642,8 @@ export class RaceScene extends Phaser.Scene {
     const rival = this.rival as Rival;
     const p = this.panelText;
     const margin = `${(Math.abs(timeMs - rivalTime) / 1000).toFixed(Math.abs(timeMs - rivalTime) < PHOTO_FINISH_MS ? 3 : 2)} s`;
-    const best = isRecord ? '  +  NEW PERSONAL BEST' : '';
+    const best = isRecord ? '  NEW BEST!' : '';
+    this.rivalPortrait.setTexture(portraitKey(rival.id)).setDisplaySize(88, 88).setVisible(true);
     if (sweep) {
       p.headline.setText('MEET CHAMPION!  ALL RIVALS BEATEN').setColor(COLORS.gold);
     } else if (this.wonAgainstRival) {

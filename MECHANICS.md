@@ -39,25 +39,32 @@ Text generator version 1: difficulty band 5.5 to 13.5 (about the 15th to
 
 ## Training rivals (Train mode)
 
-Status: **provisional, built at the creative director's request on
-2026-11-24; names and speeds await confirmation.** Rivals are content, not
-rules: they type under ruleset `100m@1` like any player, and results
-against them never reach a leaderboard.
+Status: **roster approved by the creative director on 2026-11-24** (names,
+nicknames, order and speed bands). Reaction times, error rates and rhythm
+are my tuning and can change without affecting the bands. Rivals are
+content, not rules: they type under ruleset `100m@1` like any player, and
+results against them never reach a leaderboard.
 
-| Rival | Speed | 100m time (about) | Reaction | Error rate per key |
-| --- | --- | --- | --- | --- |
-| The Snail | 20 WPM | 60.0 s | 0.42 s | 3.0% |
-| The Tortoise | 30 WPM | 40.0 s | 0.36 s | 2.5% |
-| The Penguin | 40 WPM | 30.0 s | 0.31 s | 2.0% |
-| The Fox | 55 WPM | 21.8 s | 0.27 s | 1.8% |
-| The Hare | 70 WPM | 17.1 s | 0.24 s | 1.5% |
-| The Gazelle | 85 WPM | 14.1 s | 0.21 s | 1.2% |
-| The Cheetah | 100 WPM | 12.0 s | 0.185 s | 1.0% |
-| The Falcon | 120 WPM | 10.0 s | 0.16 s | 0.6% |
+| # | Name | Nickname | Speed band | Typed at | Reaction | Errors per key |
+| --- | --- | --- | --- | --- | --- | --- |
+| 01 | Terry Shellman | Turtle | Under 25 WPM | 18 to 24 | 0.44 s | 3.0% |
+| 02 | Sleepy Steve | Sloth | 25-34 WPM | 25 to 34 | 0.40 s | 2.7% |
+| 03 | Frostbite | Penguin | 35-44 WPM | 35 to 44 | 0.34 s | 2.2% |
+| 04 | Ricky Rapid | Rabbit | 45-54 WPM | 45 to 54 | 0.30 s | 2.0% |
+| 05 | The Sly Guy | Fox | 55-64 WPM | 55 to 64 | 0.27 s | 1.8% |
+| 06 | Wolfgang | Wolf | 65-74 WPM | 65 to 74 | 0.245 s | 1.5% |
+| 07 | King Leo | Lion | 75-84 WPM | 75 to 84 | 0.225 s | 1.3% |
+| 08 | Lightning Legs | Gazelle | 85-94 WPM | 85 to 94 | 0.205 s | 1.1% |
+| 09 | Speed Demon | Cheetah | 95-109 WPM | 95 to 109 | 0.185 s | 0.9% |
+| 10 | The Peregrine | Falcon | 110+ WPM | 110 to 125 | 0.16 s | 0.6% |
 
-- A rival's finishing time varies by up to 1.5% either way from race to race.
-- A rival unlocks when the one before it is beaten. A win means crossing the line first; a dead heat is not a win.
-- Beating all eight at a distance earns that distance's Meet Champion badge.
+- Each race, a rival types at a speed drawn from inside its band, so the same rival is a little quicker or slower from race to race.
+- Bands do not overlap, so a higher-numbered rival always beats a lower one on the same line.
+- A rival unlocks when the one before it is beaten. Nobody skips ahead (decided 2026-11-24).
+- A win means crossing the line first; a dead heat is not a win.
+- Beating all ten at a distance earns that distance's Meet Champion badge.
 
-Open questions: are eight rivals and these speeds right, and should a fast
-typist be able to skip straight to a harder rival?
+## Online versus (Compete)
+
+- Maximum four athletes per race for now (decided 2026-11-24; replaces the earlier eight lanes).
+- Joining is by room PIN (decided 2026-11-24). A QR code is optional later.

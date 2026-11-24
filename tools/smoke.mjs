@@ -208,7 +208,7 @@ try {
     const s = window.__typlympics.scene.getScene('rivals');
     return s.rows[s.selected].rivalId;
   });
-  check('the opponent screen starts on the next rival to beat', startRow === 'snail', startRow);
+  check('the opponent screen starts on the next rival to beat', startRow === 'turtle', startRow);
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await sleep(200);
@@ -218,7 +218,7 @@ try {
   const rr = await runRace({ gapMs: 45 });
   await page.screenshot({ path: join(outDir, '10-rival-result.png') });
   const afterRival = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles['smoke-test']);
-  check('beating a rival is recorded for the athlete', rr.finished && afterRival.rivalsBeaten['100m@1']?.includes('snail'), JSON.stringify(afterRival.rivalsBeaten));
+  check('beating a rival is recorded for the athlete', rr.finished && afterRival.rivalsBeaten['100m@1']?.includes('turtle'), JSON.stringify(afterRival.rivalsBeaten));
   await page.keyboard.press('Escape');
   await scene('rivals');
   await sleep(200);

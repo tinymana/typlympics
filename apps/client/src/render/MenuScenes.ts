@@ -15,6 +15,7 @@ import {
   type Save,
 } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
+import { portraitKey, preloadPortraits } from './portraits';
 import { ensureTextures } from './textures';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
 
@@ -131,7 +132,6 @@ export class EventSelectScene extends Phaser.Scene {
 interface OpponentRow {
   rivalId: string | null;
   label: string;
-  speed: string;
   status: string;
   locked: boolean;
   beaten: boolean;
@@ -139,8 +139,8 @@ interface OpponentRow {
 
 /**
  * Train, step two: who to race. A time trial against your own best, or the
- * ladder of rivals, slowest to fastest. Each rival unlocks when the one
- * before it is beaten.
+ * roster of rivals, slowest to fastest. Each rival unlocks when the one
+ * before it is beaten; nobody skips ahead.
  */
 export class RivalSelectScene extends Phaser.Scene {
   private selected = 0;
@@ -149,9 +149,16 @@ export class RivalSelectScene extends Phaser.Scene {
   private texts: Phaser.GameObjects.Text[][] = [];
   private note!: Phaser.GameObjects.Text;
   private sfx!: Sfx;
+  private portrait!: Phaser.GameObjects.Image;
+  private card!: { number: Phaser.GameObjects.Text; name: Phaser.GameObjects.Text; nick: Phaser.GameObjects.Text; band: Phaser.GameObjects.Text; state: Phaser.GameObjects.Text };
+  private bestText = '';
 
   constructor() {
     super('rivals');
+  }
+
+  preload(): void {
+    preloadPortraits(this);
   }
 
   create(): void {
@@ -165,19 +172,18 @@ export class RivalSelectScene extends Phaser.Scene {
     const beaten = rivalsBeatenFor(ctx.profile, SPRINT_100M_V1.id);
     const upNext = nextRival(beaten);
     const rec = ctx.profile.records[SPRINT_100M_V1.id];
-    const best = rec && verifyRecord(SPRINT_100M_V1, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
+    this.bestText = rec && verifyRecord(SPRINT_100M_V1, rec) ? `BEST ${formatTime(rec.timeMs)}` : 'NO TIME YET';
 
     this.rows = [
-      { rivalId: null, label: 'TIME TRIAL', speed: 'YOUR OWN BEST', status: best, locked: false, beaten: false },
+      { rivalId: null, label: 'TIME TRIAL', status: this.bestText, locked: false, beaten: false },
       ...RIVALS.map((r, i): OpponentRow => {
         const isBeaten = beaten.includes(r.id);
         const previous = RIVALS[i - 1];
         const locked = !isBeaten && previous !== undefined && !beaten.includes(previous.id);
         return {
           rivalId: r.id,
-          label: r.name,
-          speed: `${r.wpm} WPM`,
-          status: isBeaten ? 'BEATEN' : locked ? 'LOCKED' : 'CHALLENGER',
+          label: `${String(r.number).padStart(2, '0')}  ${r.name}`,
+          status: isBeaten ? 'BEATEN' : locked ? 'LOCKED' : r.band,
           locked,
           beaten: isBeaten,
         };
@@ -187,22 +193,34 @@ export class RivalSelectScene extends Phaser.Scene {
     this.selected = upNext ? this.rows.findIndex((r) => r.rivalId === upNext.id) : 0;
 
     addBackdrop(this);
-    const done = beaten.filter((id) => RIVALS.some((r) => r.id === id)).length;
+    const done = RIVALS.filter((r) => beaten.includes(r.id)).length;
     addHeading(
       this,
       '100 M  ·  CHOOSE YOUR RACE',
       allRivalsBeaten(beaten) ? 'MEET CHAMPION: EVERY RIVAL BEATEN' : `RIVALS BEATEN  ${done} OF ${RIVALS.length}`,
     );
+
+    // Left: the list.
     this.rows.forEach((row, i) => {
-      const y = 104 + i * 40;
-      this.boxes.push(this.add.rectangle(GAME_W / 2, y + 17, 640, 34, 0x2a1458).setStrokeStyle(2, 0x5b3aa6));
+      const y = 100 + i * 34;
+      this.boxes.push(this.add.rectangle(30, y, 540, 30, 0x2a1458).setOrigin(0).setStrokeStyle(2, 0x5b3aa6));
       this.texts.push([
-        this.add.text(GAME_W / 2 - 300, y + 17, row.label, mono(20, COLORS.white)).setOrigin(0, 0.5),
-        this.add.text(GAME_W / 2 + 60, y + 17, row.speed, mono(16, COLORS.ice)).setOrigin(1, 0.5),
-        this.add.text(GAME_W / 2 + 300, y + 17, row.status, mono(15, COLORS.ice)).setOrigin(1, 0.5),
+        this.add.text(44, y + 15, row.label, mono(17, COLORS.white)).setOrigin(0, 0.5),
+        this.add.text(558, y + 15, row.status, mono(14, COLORS.ice)).setOrigin(1, 0.5),
       ]);
     });
-    this.note = this.add.text(GAME_W / 2, 482, '', mono(15, COLORS.red)).setOrigin(0.5);
+    this.note = this.add.text(300, 488, '', mono(14, COLORS.red)).setOrigin(0.5);
+
+    // Right: the selected opponent.
+    addPanel(this, 590, 100, 340, 370);
+    this.portrait = this.add.image(760, 228, portraitKey('turtle')).setDisplaySize(232, 232);
+    this.card = {
+      number: this.add.text(604, 108, '', mono(16, COLORS.gold)),
+      name: this.add.text(760, 366, '', mono(24, COLORS.white)).setOrigin(0.5),
+      nick: this.add.text(760, 394, '', mono(16, COLORS.gold)).setOrigin(0.5),
+      band: this.add.text(760, 420, '', mono(18, COLORS.ice)).setOrigin(0.5),
+      state: this.add.text(760, 446, '', mono(14, COLORS.white)).setOrigin(0.5),
+    };
     addFooter(this, '▲ ▼  SELECT     ENTER  RACE     ESC  BACK');
 
     onShutdown(
@@ -220,8 +238,8 @@ export class RivalSelectScene extends Phaser.Scene {
           } else if (key === 'Enter' || key === 'Tab') {
             const row = this.rows[this.selected] as OpponentRow;
             if (row.locked) {
-              const blocker = this.rows.find((r) => r.rivalId !== null && !r.beaten && !r.locked);
-              this.note.setText(blocker ? `BEAT ${blocker.label} FIRST` : 'LOCKED');
+              const blocker = RIVALS.find((r) => this.rows.some((x) => x.rivalId === r.id && !x.beaten && !x.locked));
+              this.note.setText(blocker ? `BEAT ${blocker.name} FIRST` : 'LOCKED');
               this.sfx.error();
             } else {
               this.sfx.marks();
@@ -240,12 +258,31 @@ export class RivalSelectScene extends Phaser.Scene {
     this.rows.forEach((row, i) => {
       const on = i === this.selected;
       (this.boxes[i] as Phaser.GameObjects.Rectangle).setFillStyle(on ? 0xffd23f : 0x2a1458).setStrokeStyle(2, on ? 0xffffff : 0x5b3aa6);
-      const base = row.locked ? COLORS.dim : COLORS.white;
-      const [label, speed, status] = this.texts[i] as Phaser.GameObjects.Text[];
-      label?.setColor(on ? COLORS.ink : base);
-      speed?.setColor(on ? COLORS.ink : row.locked ? COLORS.dim : COLORS.ice);
+      const [label, status] = this.texts[i] as Phaser.GameObjects.Text[];
+      label?.setColor(on ? COLORS.ink : row.locked ? COLORS.dim : COLORS.white);
       status?.setColor(on ? COLORS.ink : row.beaten ? COLORS.green : row.locked ? COLORS.dim : COLORS.gold);
     });
+
+    const row = this.rows[this.selected] as OpponentRow;
+    const rival = RIVALS.find((r) => r.id === row.rivalId);
+    if (rival) {
+      // A locked rival is shown in silhouette until the one before is beaten.
+      this.portrait.setTexture(portraitKey(rival.id)).setDisplaySize(232, 232).setVisible(true);
+      if (row.locked) this.portrait.setTint(0x120824).setTintMode(Phaser.TintModes.FILL);
+      else this.portrait.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      this.card.number.setText(`No. ${String(rival.number).padStart(2, '0')}`);
+      this.card.name.setText(row.locked ? '? ? ?' : rival.name);
+      this.card.nick.setText(row.locked ? '' : `"${rival.nickname}"`);
+      this.card.band.setText(rival.band);
+      this.card.state.setText(row.beaten ? 'BEATEN' : row.locked ? 'LOCKED' : 'YOUR NEXT CHALLENGER').setColor(row.beaten ? COLORS.green : row.locked ? COLORS.dim : COLORS.pink);
+    } else {
+      this.portrait.setVisible(false);
+      this.card.number.setText('');
+      this.card.name.setText('TIME TRIAL');
+      this.card.nick.setText('RACE THE GHOST OF YOUR BEST RUN');
+      this.card.band.setText(this.bestText);
+      this.card.state.setText('');
+    }
   }
 }
 
@@ -330,10 +367,10 @@ export class CareerScene extends Phaser.Scene {
       .setOrigin(1, 0);
     // One pip per rival, slowest to fastest, in its kit colour once beaten.
     RIVALS.forEach((r, i) => {
-      const x = 512 + i * 52;
+      const x = 504 + i * 42;
       const won = beaten.includes(r.id);
-      this.add.rectangle(x, 346, 44, 16, won ? r.tint : 0x2a1458).setOrigin(0, 0).setStrokeStyle(2, won ? 0xffffff : 0x5b3aa6);
-      this.add.text(x + 22, 372, r.name.replace('THE ', ''), mono(9, won ? COLORS.white : COLORS.dim)).setOrigin(0.5);
+      this.add.rectangle(x, 346, 36, 16, won ? r.tint : 0x2a1458).setOrigin(0, 0).setStrokeStyle(2, won ? 0xffffff : 0x5b3aa6);
+      this.add.text(x + 18, 372, r.nickname, mono(8, won ? COLORS.white : COLORS.dim)).setOrigin(0.5);
     });
 
     // Right, below: weekly medals.
@@ -372,8 +409,8 @@ const INFO: Record<'compete' | 'records', InfoContent> = {
     sub: 'LIVE RACES AGAINST OTHER ATHLETES',
     steps: [
       ['HOST', 'Start a race room and pick the distance.'],
-      ['INVITE', 'Others join with a room PIN or by scanning a QR code.'],
-      ['RACE', 'Everyone starts on the same gun, up to eight lanes.'],
+      ['INVITE', 'Others join by typing your room PIN.'],
+      ['RACE', 'Everyone starts on the same gun. Up to four athletes for now.'],
       ['RECORD', 'Results count toward the all-time leaderboard for that distance.'],
     ],
     note: 'Not built yet. Live races need the game server, which is the next major piece of work.',
