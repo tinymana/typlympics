@@ -4,12 +4,12 @@ import { simulate, type InputEvent, type SprintRuleset } from '@typlympics/sim';
  * Versioned local save. Pure functions over JSON strings so they can be
  * tested without a browser.
  *
- * Version 2 holds athlete profiles (name, nationality, PIN), each with its
- * own records. Every stored record keeps its keystroke log: the time is
+ * Version 2 added athlete profiles (name, nationality, PIN), each with its
+ * own records. Version 3 adds each athlete's race history for the career page. Every stored record keeps its keystroke log: the time is
  * re-derived from the log on load, never trusted as stored.
  */
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'typlympics.save';
 
 export const NAME_MAX = 12;
@@ -27,6 +27,22 @@ export interface RecordV1 {
   log: PackedLog;
   achievedAt: string;
 }
+
+/** One finished race, kept for the career page. */
+export interface RaceSummary {
+  rulesetId: string;
+  timeMs: number;
+  wpm: number;
+  /** 0 to 1. */
+  accuracy: number;
+  reactionMs: number | null;
+  errors: number;
+  falseStart: boolean;
+  at: string;
+}
+
+/** Most recent finished races kept per athlete. */
+export const HISTORY_MAX = 200;
 
 export interface Totals {
   races: number;
@@ -46,10 +62,12 @@ export interface Profile {
   /** Best run per ruleset id. */
   records: Record<string, RecordV1>;
   totals: Totals;
+  /** Finished races, oldest first, capped at HISTORY_MAX. */
+  history: RaceSummary[];
 }
 
 export interface Save {
-  saveVersion: 2;
+  saveVersion: 3;
   settings: { volume: number };
   /** The athlete currently signed in on this device, if any. */
   activeProfileId: string | null;
@@ -57,7 +75,7 @@ export interface Save {
 }
 
 export function defaultSave(): Save {
-  return { saveVersion: 2, settings: { volume: 0.6 }, activeProfileId: null, profiles: {} };
+  return { saveVersion: 3, settings: { volume: 0.6 }, activeProfileId: null, profiles: {} };
 }
 
 // ------------------------------------------------------------ profiles
@@ -138,6 +156,7 @@ export function createProfile(save: Save, input: NewProfile, nowIso: string, sal
     createdAt: nowIso,
     records: {},
     totals: { races: 0, finishes: 0 },
+    history: [],
   };
   save.profiles[id] = profile;
   return profile;
@@ -156,9 +175,18 @@ export function ensureGuest(save: Save, nowIso: string): Profile {
     createdAt: nowIso,
     records: {},
     totals: { races: 0, finishes: 0 },
+    history: [],
   };
   save.profiles[GUEST_ID] = guest;
   return guest;
+}
+
+/** Appends a finished race to an athlete's history, dropping the oldest past the cap. */
+export function addToHistory(profile: Profile, summary: RaceSummary): void {
+  profile.history.push(summary);
+  if (profile.history.length > HISTORY_MAX) {
+    profile.history.splice(0, profile.history.length - HISTORY_MAX);
+  }
 }
 
 export function randomSalt(): string {
@@ -227,7 +255,23 @@ const MIGRATIONS: Record<number, Migration> = {
         : {},
     };
   },
+  // Version 2 had no race history. Profiles gain an empty one when parsed.
+  2: (old) => ({ ...old, saveVersion: 3 }),
 };
+
+function isValidSummary(v: unknown): v is RaceSummary {
+  if (!isObject(v)) return false;
+  return (
+    typeof v['rulesetId'] === 'string' &&
+    typeof v['timeMs'] === 'number' &&
+    typeof v['wpm'] === 'number' &&
+    typeof v['accuracy'] === 'number' &&
+    (v['reactionMs'] === null || typeof v['reactionMs'] === 'number') &&
+    typeof v['errors'] === 'number' &&
+    typeof v['falseStart'] === 'boolean' &&
+    typeof v['at'] === 'string'
+  );
+}
 
 function isValidRecordShape(v: unknown): v is RecordV1 {
   if (!isObject(v)) return false;
@@ -270,6 +314,7 @@ function parseProfile(id: string, v: unknown): Profile | null {
       races: typeof totals['races'] === 'number' ? totals['races'] : 0,
       finishes: typeof totals['finishes'] === 'number' ? totals['finishes'] : 0,
     },
+    history: (Array.isArray(v['history']) ? v['history'] : []).filter(isValidSummary).slice(-HISTORY_MAX),
   };
 }
 
@@ -298,7 +343,7 @@ export function parseSave(raw: string | null): Save {
   const settings = isObject(current['settings']) ? current['settings'] : {};
   const volume = typeof settings['volume'] === 'number' ? settings['volume'] : base.settings.volume;
   const out: Save = {
-    saveVersion: 2,
+    saveVersion: 3,
     settings: { volume: Math.min(1, Math.max(0, volume)) },
     activeProfileId: null,
     profiles: {},

@@ -2,6 +2,37 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.5",
+      "date": "2026-11-24",
+      "title": "The main menu and your career",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Main menu: Train, Compete, Career and World Records. Up and down arrows to choose, Enter to go."
+        },
+        {
+          "tag": "new",
+          "text": "Train: pick a distance, then race. The 100m is open; the 200m, 400m, 800m and 1500m are listed and on the way."
+        },
+        {
+          "tag": "new",
+          "text": "Career page: your best time and words per minute, recent averages, accuracy, reaction time, clean races, false starts and your recent races."
+        },
+        {
+          "tag": "new",
+          "text": "Every finished race is now kept in your history, so your career figures build as you play."
+        },
+        {
+          "tag": "new",
+          "text": "Compete and World Records show what is coming: hosted races you join with a PIN or QR code, and all-time leaderboards."
+        },
+        {
+          "tag": "improved",
+          "text": "New start-screen art, with the menu now live on top of it."
+        }
+      ]
+    },
+    {
       "version": "0.4",
       "date": "2026-11-24",
       "title": "Sign in and the real start screen",

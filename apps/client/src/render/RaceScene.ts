@@ -18,6 +18,7 @@ import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import {
   activeProfile,
+  addToHistory,
   browserStore,
   loadSave,
   packLog,
@@ -460,7 +461,7 @@ export class RaceScene extends Phaser.Scene {
   private onControl(key: ControlKey): void {
     this.sfx.unlock();
     if (key === 'Escape') {
-      if (this.phase === 'result') this.scene.start('title');
+      if (this.phase === 'result') this.scene.start('events');
       else this.beginRace();
       return;
     }
@@ -479,6 +480,16 @@ export class RaceScene extends Phaser.Scene {
     const previous = this.pbTimeMs;
     const isRecord = previous === null || timeMs < previous;
     this.profile.totals.finishes += 1;
+    addToHistory(this.profile, {
+      rulesetId: this.ruleset.id,
+      timeMs,
+      wpm: official.wpm ?? 0,
+      accuracy: official.accuracy,
+      reactionMs: official.reactionMs,
+      errors: official.errors,
+      falseStart: official.falseStart,
+      at: new Date().toISOString(),
+    });
     if (isRecord) {
       this.profile.records[this.ruleset.id] = {
         rulesetId: this.ruleset.id,
@@ -559,7 +570,7 @@ export class RaceScene extends Phaser.Scene {
         })
         .join('   '),
     );
-    p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  esc: title`);
+    p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  esc: menu`);
   }
 
   // ------------------------------------------------------------ text band

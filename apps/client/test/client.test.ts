@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { SPRINT_100M_V1 as R, simulate, type InputEvent } from '@typlympics/sim';
 import { generateSprintLine } from '@typlympics/content';
 import { classifyKey } from '../src/input/keyboard';
+import { FORM_WINDOW, careerStats } from '../src/storage/career';
 import { COUNTRIES, DEFAULT_COUNTRY_INDEX, countryName, findCountry } from '../src/storage/countries';
 import {
   GUEST_ID,
+  HISTORY_MAX,
   SAVE_KEY,
   activeProfile,
+  addToHistory,
   checkPin,
   createProfile,
   defaultSave,
@@ -22,6 +25,7 @@ import {
   serializeSave,
   verifyRecord,
   type KeyValueStore,
+  type RaceSummary,
   type RecordV1,
   type Save,
 } from '../src/storage/save';
@@ -195,7 +199,7 @@ describe('versioned save', () => {
 
   it('migrates a version 0 save and drops its unverifiable time', () => {
     const save = parseSave(JSON.stringify({ pb100m: 9876, volume: 0.3, races: 12 }));
-    expect(save.saveVersion).toBe(2);
+    expect(save.saveVersion).toBe(3);
     expect(save.settings.volume).toBe(0.3);
     expect(save.profiles[GUEST_ID]?.totals.races).toBe(12);
     expect(save.profiles[GUEST_ID]?.records).toEqual({});
@@ -205,7 +209,7 @@ describe('versioned save', () => {
     const rec = makeRecord();
     const v1 = { saveVersion: 1, settings: { volume: 0.5 }, records: { [R.id]: rec }, totals: { races: 9, finishes: 8 } };
     const save = parseSave(JSON.stringify(v1));
-    expect(save.saveVersion).toBe(2);
+    expect(save.saveVersion).toBe(3);
     expect(save.activeProfileId).toBeNull();
     const guest = save.profiles[GUEST_ID];
     expect(guest?.records[R.id]).toEqual(rec);
@@ -216,6 +220,19 @@ describe('versioned save', () => {
   it('migrates an empty version 1 save without inventing a guest', () => {
     const v1 = { saveVersion: 1, settings: { volume: 0.5 }, records: {}, totals: { races: 0, finishes: 0 } };
     expect(parseSave(JSON.stringify(v1)).profiles).toEqual({});
+  });
+
+  it('migrates a version 2 save: athletes keep their PIN and records and gain an empty history', () => {
+    const v2 = JSON.parse(serializeSave(saveWithAthlete()));
+    v2.saveVersion = 2;
+    delete v2.profiles.ryan.history;
+    const save = parseSave(JSON.stringify(v2));
+    expect(save.saveVersion).toBe(3);
+    const ryan = save.profiles['ryan'];
+    expect(ryan?.history).toEqual([]);
+    expect(ryan?.records[R.id]).toBeDefined();
+    expect(ryan && checkPin(ryan, '4821')).toBe(true);
+    expect(save.activeProfileId).toBe('ryan');
   });
 
   it('refuses a save written by a newer build instead of corrupting it', () => {
@@ -256,6 +273,87 @@ describe('versioned save', () => {
     expect(loadSave(broken)).toEqual(defaultSave());
     expect(() => persistSave(broken, save)).not.toThrow();
     expect(loadSave(null)).toEqual(defaultSave());
+  });
+});
+
+function run(timeMs: number, over: Partial<RaceSummary> = {}): RaceSummary {
+  return {
+    rulesetId: R.id,
+    timeMs,
+    wpm: 20 / (timeMs / 60000),
+    accuracy: 1,
+    reactionMs: 180,
+    errors: 0,
+    falseStart: false,
+    at: NOW,
+    ...over,
+  };
+}
+
+describe('race history and career stats', () => {
+  it('is empty for a new athlete', () => {
+    const save = defaultSave();
+    const p = createProfile(save, { name: 'Ana', nationality: 'ESP', pin: '0007' }, NOW, 's');
+    const stats = careerStats(p, R.id);
+    expect(stats).toMatchObject({ racesFinished: 0, bestTimeMs: null, bestWpm: null, recentAvgTimeMs: null, trendMs: null });
+    expect(stats.recent).toEqual([]);
+  });
+
+  it('reports bests, averages, clean races and false starts', () => {
+    const save = defaultSave();
+    const p = createProfile(save, { name: 'Ana', nationality: 'ESP', pin: '0007' }, NOW, 's');
+    addToHistory(p, run(12000));
+    addToHistory(p, run(10000, { accuracy: 0.9, errors: 4, reactionMs: 220 }));
+    addToHistory(p, run(14000, { falseStart: true, reactionMs: 40 }));
+    p.totals = { races: 5, finishes: 3 };
+    const stats = careerStats(p, R.id);
+    expect(stats.racesStarted).toBe(5);
+    expect(stats.racesFinished).toBe(3);
+    expect(stats.bestTimeMs).toBe(10000);
+    expect(stats.bestWpm).toBeCloseTo(120, 5);
+    expect(stats.recentAvgTimeMs).toBe(12000);
+    expect(stats.recentAvgAccuracy).toBeCloseTo((1 + 0.9 + 1) / 3, 10);
+    // The false start is left out of reaction figures.
+    expect(stats.recentAvgReactionMs).toBe(200);
+    expect(stats.bestReactionMs).toBe(180);
+    expect(stats.cleanRaces).toBe(2);
+    expect(stats.falseStarts).toBe(1);
+    expect(stats.recent.map((r) => r.timeMs)).toEqual([14000, 10000, 12000]);
+  });
+
+  it('averages only the most recent races and reports the trend against the window before', () => {
+    const save = defaultSave();
+    const p = createProfile(save, { name: 'Ana', nationality: 'ESP', pin: '0007' }, NOW, 's');
+    for (let i = 0; i < FORM_WINDOW; i++) addToHistory(p, run(15000));
+    for (let i = 0; i < FORM_WINDOW; i++) addToHistory(p, run(12000));
+    const stats = careerStats(p, R.id);
+    expect(stats.recentAvgTimeMs).toBe(12000);
+    expect(stats.trendMs).toBe(-3000);
+    expect(stats.bestTimeMs).toBe(12000);
+  });
+
+  it('ignores races from other events', () => {
+    const save = defaultSave();
+    const p = createProfile(save, { name: 'Ana', nationality: 'ESP', pin: '0007' }, NOW, 's');
+    addToHistory(p, run(30000, { rulesetId: '200m@1' }));
+    expect(careerStats(p, R.id).racesFinished).toBe(0);
+  });
+
+  it('caps stored history and keeps the newest races', () => {
+    const save = defaultSave();
+    const p = createProfile(save, { name: 'Ana', nationality: 'ESP', pin: '0007' }, NOW, 's');
+    for (let i = 0; i < HISTORY_MAX + 25; i++) addToHistory(p, run(20000 - i));
+    expect(p.history.length).toBe(HISTORY_MAX);
+    expect(p.history[p.history.length - 1]?.timeMs).toBe(20000 - (HISTORY_MAX + 24));
+  });
+
+  it('survives a save round trip and drops malformed history entries', () => {
+    const save = saveWithAthlete();
+    addToHistory(save.profiles['ryan'] as NonNullable<(typeof save.profiles)[string]>, run(11000));
+    const raw = JSON.parse(serializeSave(save));
+    raw.profiles.ryan.history.push({ timeMs: 'quick' });
+    const parsed = parseSave(JSON.stringify(raw));
+    expect(parsed.profiles['ryan']?.history).toEqual([run(11000)]);
   });
 });
 

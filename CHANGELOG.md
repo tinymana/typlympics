@@ -5,6 +5,22 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (main menu and career)
+
+- Live main menu on the title screen: Train, Compete, Career, World
+  Records. The background is the menu-less start-screen art; the menu
+  frame and rows are cut from the art that has the menu, with a selected
+  and an unselected state derived for each row.
+- Train: distance select. The 100m is playable; 200m, 400m, 800m and 1500m
+  are listed as coming soon.
+- Career page from local data: best time and WPM, averages over the last
+  20 races, accuracy, reaction, clean races, false starts, trend, recent
+  races, and a weekly medals panel that fills once online boards exist.
+- Save version 3: each athlete keeps a history of finished races (latest
+  200). Version 2 saves migrate with an empty history.
+- Compete and World Records screens describing the planned flow.
+- 73 tests; the smoke test walks the menu and opens every screen.
+
 ### Added (sign-in and start screen)
 
 - Athlete sign-in scene: name, nationality (70 countries, arrows or

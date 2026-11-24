@@ -1,19 +1,46 @@
 import Phaser from 'phaser';
 import { SPRINT_100M_V1, formatTime } from '@typlympics/sim';
+import menuBoxUrl from '../assets/menu_box.png';
+import menuRowsUrl from '../assets/menu_rows.png';
 import titleArtUrl from '../assets/title_art.webp';
 import { Sfx } from '../audio/sfx';
-import { attachKeyboard } from '../input/keyboard';
+import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { activeProfile, browserStore, loadSave, verifyRecord } from '../storage/save';
-import { COLORS, FONT_DISPLAY, FONT_MONO, GAME_W } from './layout';
+import { COLORS, FONT_MONO, GAME_W } from './layout';
 import { ensureTextures } from './textures';
+
+/** Where the menu frame and its rows sit on the start screen, in canvas pixels. */
+const BOX_X = 352;
+const BOX_Y = 330;
+const ROW_X = 364;
+const ROW_TOPS = [339, 374, 410, 447] as const;
+const ROW_W = 242;
+const ROW_H = 34;
+
+const MENU = [
+  { label: 'TRAIN', scene: 'events' },
+  { label: 'COMPETE', scene: 'compete' },
+  { label: 'CAREER', scene: 'career' },
+  { label: 'WORLD RECORDS', scene: 'records' },
+] as const;
+
+/** Remembered between visits so Esc returns to the row you came from. */
+let lastSelected = 0;
 
 /**
  * Title screen, built on the creative director's start-screen art.
- * The art's menu is part of the picture; only "Play event" works so far,
- * so the other rows are dimmed until their modes exist.
+ *
+ * The background is the version of the art without a menu. The menu frame
+ * and its four rows are cut from the version with the menu, each row in a
+ * selected and an unselected state, so the lettering and icons stay exactly
+ * as drawn while the menu itself is live.
  */
 export class TitleScene extends Phaser.Scene {
   private detach: (() => void) | null = null;
+  private rows: Phaser.GameObjects.Image[] = [];
+  private cursor!: Phaser.GameObjects.Text;
+  private selected = 0;
+  private sfx!: Sfx;
 
   constructor() {
     super('title');
@@ -21,6 +48,10 @@ export class TitleScene extends Phaser.Scene {
 
   preload(): void {
     if (!this.textures.exists('titleArt')) this.load.image('titleArt', titleArtUrl);
+    if (!this.textures.exists('menuBox')) this.load.image('menuBox', menuBoxUrl);
+    if (!this.textures.exists('menuRows')) {
+      this.load.spritesheet('menuRows', menuRowsUrl, { frameWidth: ROW_W, frameHeight: ROW_H });
+    }
   }
 
   create(): void {
@@ -31,11 +62,17 @@ export class TitleScene extends Phaser.Scene {
       this.scene.start('login');
       return;
     }
+    this.sfx = new Sfx(save.settings.volume);
+    this.selected = lastSelected;
 
     this.add.image(0, 0, 'titleArt').setOrigin(0);
+    this.add.image(BOX_X, BOX_Y, 'menuBox').setOrigin(0);
 
-    // Dim the menu rows that are not playable yet.
-    this.add.rectangle(487, 430, 236, 112, 0x120824, 0.55);
+    // Menu rows: sheet frames are [row * 2] unselected, [row * 2 + 1] selected.
+    this.rows = ROW_TOPS.map((top, i) => this.add.image(ROW_X, top, 'menuRows', i * 2).setOrigin(0));
+    this.cursor = this.add
+      .text(0, 0, '▶', { fontFamily: FONT_MONO, fontSize: '18px', fontStyle: 'bold', color: COLORS.ink })
+      .setOrigin(0.5);
 
     const label = (size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle => ({
       fontFamily: FONT_MONO,
@@ -59,35 +96,46 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(1, 0);
 
     const prompt = this.add
-      .text(GAME_W / 2, 316, 'PRESS ENTER', {
-        fontFamily: FONT_DISPLAY,
-        fontSize: '30px',
-        fontStyle: 'italic',
-        color: COLORS.white,
-        stroke: COLORS.ink,
-        strokeThickness: 8,
-      })
+      .text(GAME_W / 2, 314, '▲ ▼  SELECT     ENTER  GO', label(15, COLORS.white))
       .setOrigin(0.5);
-    this.tweens.add({ targets: prompt, alpha: 0.15, duration: 520, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: prompt, alpha: 0.35, duration: 620, yoyo: true, repeat: -1 });
 
-    const sfx = new Sfx(save.settings.volume);
-    const start = (): void => {
-      sfx.unlock();
-      sfx.marks();
-      this.scene.start('race');
-    };
     this.detach = attachKeyboard(window, {
       onChar: (ch) => {
-        if (ch === ' ') start();
+        if (ch === ' ') this.choose();
       },
-      onControl: (key) => {
-        if (key === 'Enter' || key === 'Tab') start();
-        else if (key === 'Escape') this.scene.start('login', { switch: true });
-      },
+      onControl: (key) => this.onControl(key),
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.detach?.();
       this.detach = null;
     });
+    this.refresh();
+  }
+
+  private onControl(key: ControlKey): void {
+    this.sfx.unlock();
+    if (key === 'ArrowUp' || key === 'ArrowDown') {
+      const dir = key === 'ArrowDown' ? 1 : -1;
+      this.selected = (this.selected + dir + MENU.length) % MENU.length;
+      this.sfx.step();
+      this.refresh();
+    } else if (key === 'Enter' || key === 'Tab') {
+      this.choose();
+    } else if (key === 'Escape') {
+      this.scene.start('login', { switch: true });
+    }
+  }
+
+  private choose(): void {
+    this.sfx.unlock();
+    this.sfx.marks();
+    lastSelected = this.selected;
+    this.scene.start((MENU[this.selected] as (typeof MENU)[number]).scene);
+  }
+
+  private refresh(): void {
+    this.rows.forEach((row, i) => row.setFrame(i * 2 + (i === this.selected ? 1 : 0)));
+    this.cursor.setPosition(ROW_X + 14, (ROW_TOPS[this.selected] as number) + ROW_H / 2);
   }
 }

@@ -107,6 +107,11 @@ try {
 
   // Race 1: clean, moderate pace.
   const startRematch = Date.now();
+  // Title menu: Train is selected by default; then pick the 100m.
+  await page.keyboard.press('Enter');
+  await scene('events');
+  await sleep(250);
+  await page.screenshot({ path: join(outDir, '1b-train.png') });
   await page.keyboard.press('Enter');
   await waitPhase('marks');
   await sleep(300);
@@ -148,14 +153,42 @@ try {
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')));
   const best = Math.min(r1.timeMs, r3.timeMs);
   const me = stored.profiles['smoke-test'];
-  check('save has version 2 and the athlete\'s best time with its log', stored.saveVersion === 2 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
+  check('save has version 3 and the athlete\'s best time with its log', stored.saveVersion === 3 && me.records['100m@1'].timeMs === best && me.records['100m@1'].log.length >= 100);
   check('save counts races', me.totals.races === 3 && me.totals.finishes === 3, JSON.stringify(me.totals));
+  check('race history has one entry per finished race', me.history.length === 3, `${me.history.length}`);
   await page.reload();
   await page.waitForFunction(() => window.__typlympics?.scene?.isActive('title'));
   await sleep(300);
   await page.screenshot({ path: join(outDir, '7-title-with-pb.png') });
 
+  // Menu: Career, Compete and World Records open and return to the title.
+  // The title remembers the last row chosen, so each step moves relative to it.
+  // Rows: 0 Train, 1 Compete, 2 Career, 3 World Records. Start on 0.
+  let row = 0;
+  for (const [target, key] of [[2, 'career'], [1, 'compete'], [3, 'records']]) {
+    while (row !== target) {
+      await page.keyboard.press('ArrowDown');
+      row = (row + 1) % 4;
+    }
+    await sleep(150);
+    if (key === 'compete') await page.screenshot({ path: join(outDir, '7b-menu-compete-selected.png') });
+    await page.keyboard.press('Enter');
+    await scene(key);
+    await sleep(250);
+    await page.screenshot({ path: join(outDir, `9-${key}.png`) });
+    await page.keyboard.press('Escape');
+    await scene('title');
+    await sleep(100);
+  }
+  check('career, compete and world records screens open from the menu', true);
+  while (row !== 0) {
+    await page.keyboard.press('ArrowDown');
+    row = (row + 1) % 4;
+  }
+
   // Frame rate while racing.
+  await page.keyboard.press('Enter');
+  await scene('events');
   await page.keyboard.press('Enter');
   await waitPhase('race');
   const fps = await page.evaluate(() => window.__typlympics.loop.actualFps);
