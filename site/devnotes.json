@@ -2,6 +2,33 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.6",
+      "date": "2026-11-24",
+      "title": "All five distances",
+      "items": [
+        {
+          "tag": "new",
+          "text": "The 200m, 400m, 800m and 1500m are open in Train, alongside the 100m. One character is one metre at every distance."
+        },
+        {
+          "tag": "new",
+          "text": "Longer races scroll the text two lines at a time, so you always see what is coming next."
+        },
+        {
+          "tag": "new",
+          "text": "Every distance has its own best time, ghost, rival ladder and Meet Champion badge."
+        },
+        {
+          "tag": "new",
+          "text": "The career page covers all five distances. Left and right arrows switch between them."
+        },
+        {
+          "tag": "improved",
+          "text": "Time standards for each distance are set at the same typing speeds as the 100m: 60, 80, 100 and 120 words a minute."
+        }
+      ]
+    },
+    {
       "version": "0.5",
       "date": "2026-11-24",
       "title": "The main menu, rivals and your career",

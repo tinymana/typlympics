@@ -13,8 +13,6 @@ export const HUD_TOP = TRACK_BOTTOM;
 /** World x of the start line and pixels per metre. */
 export const START_X = 220;
 export const PX_PER_M = 22;
-export const FINISH_X = START_X + 100 * PX_PER_M;
-export const WORLD_W = FINISH_X + 520;
 
 export const PLAYER_LANE = 2;
 export const GHOST_LANE = 1;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIFFICULTY_BAND,
+  difficultyBandFor,
   MAX_WORD_LENGTH,
   MIN_WORD_LENGTH,
   SPRINT_WORDS,
@@ -78,7 +79,20 @@ describe('sprint line generator', () => {
   it('keeps a known line for a known seed (generator version 1)', () => {
     expect(generateSprintLine('opening-ceremony').text).toMatchInlineSnapshot(`"strong then same well its small water write long seem give day come against been than we thought say"`);
   });
-  it('supports other line lengths for future events', () => {
-    for (const len of [40, 60, 400]) expect(generateSprintLine('x', len).text.length).toBe(len);
+  it('generates lines for every race distance, inside the band scaled to that length', () => {
+    for (const len of [200, 400, 800, 1500]) {
+      const band = difficultyBandFor(len);
+      for (let i = 0; i < 40; i++) {
+        const line = generateSprintLine(`long-${i}`, len);
+        expect(line.text.length).toBe(len);
+        expect(line.text).toMatch(/^[a-z]+( [a-z]+)*$/);
+        expect(line.difficulty).toBeGreaterThanOrEqual(band.min);
+        expect(line.difficulty).toBeLessThanOrEqual(band.max);
+      }
+    }
+    expect(difficultyBandFor(100)).toEqual({ min: DIFFICULTY_BAND.min, max: DIFFICULTY_BAND.max });
+  });
+  it('gives different distances different text for the same seed', () => {
+    expect(generateSprintLine('s', 200).text.startsWith(generateSprintLine('s', 100).text)).toBe(false);
   });
 });

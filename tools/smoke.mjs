@@ -55,6 +55,14 @@ try {
     }
     await page.keyboard.press('Enter');
   };
+  /** On the distance screen, moves to the given row. */
+  const pickEvent = async (index) => {
+    for (let i = 0; i < 6; i++) {
+      const sel = await page.evaluate(() => window.__typlympics.scene.getScene('events').selected);
+      if (sel === index) return;
+      await page.keyboard.press(sel < index ? 'ArrowDown' : 'ArrowUp');
+    }
+  };
   const TEST_PIN = '4821';
   await scene('login');
   await sleep(300);
@@ -199,9 +207,32 @@ try {
     row = (row + 1) % 4;
   }
 
+  // A longer distance: the 200m, with its scrolling text band.
+  await page.keyboard.press('Enter');
+  await scene('events');
+  await sleep(200);
+  await page.screenshot({ path: join(outDir, '12-distances.png') });
+  await pickEvent(1);
+  await page.keyboard.press('Enter');
+  await scene('rivals');
+  await pickTimeTrial();
+  const r200 = await runRace({ gapMs: 25 });
+  await page.screenshot({ path: join(outDir, '13-200m-result.png') });
+  const after200 = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles['smoke-test']);
+  check('the 200m runs 200 metres under its own ruleset', r200.finished && r200.distance === 200 && r200.rulesetId === '200m@1', `${r200.timeMs} ms`);
+  check('the 200m keeps its own record and history, apart from the 100m', after200.records['200m@1']?.timeMs === r200.timeMs && after200.records['100m@1'].timeMs === best && after200.history.some((h) => h.rulesetId === '200m@1'));
+  check('200m splits are reported at 50, 100, 150 and 200 metres', r200.splits.map((x) => x.mark).join() === '50,100,150,200');
+  await page.keyboard.press('Escape');
+  await scene('rivals');
+  await page.keyboard.press('Escape');
+  await scene('events');
+  await page.keyboard.press('Escape');
+  await scene('title');
+
   // Rivals: race the slowest rival, win, and see the win recorded.
   await page.keyboard.press('Enter');
   await scene('events');
+  await pickEvent(0);
   await page.keyboard.press('Enter');
   await scene('rivals');
   const startRow = await page.evaluate(() => {

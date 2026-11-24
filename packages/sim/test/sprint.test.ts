@@ -2,7 +2,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  EVENT_IDS,
+  RULESETS,
   SPRINT_100M_V1 as R,
+  eventLabel,
+  rulesetFor,
   SimInputError,
   applyInput,
   createSprint,
@@ -226,6 +230,50 @@ describe('helpers', () => {
     expect(formatTime(9999)).toBe('9.99');
     expect(formatTime(0)).toBe('0.00');
     expect(formatTime(83456)).toBe('1:23.45');
+  });
+});
+
+describe('the five track events', () => {
+  it('have one ruleset each, one character per metre, on the sprint\'s rules', () => {
+    expect(EVENT_IDS).toEqual(['100m', '200m', '400m', '800m', '1500m']);
+    const distances = EVENT_IDS.map((e) => RULESETS[e].distance);
+    expect(distances).toEqual([100, 200, 400, 800, 1500]);
+    for (const e of EVENT_IDS) {
+      const rs = RULESETS[e];
+      expect(rs.id).toBe(`${e}@1`);
+      expect(rs.event).toBe(e);
+      expect(rs.errorLockoutMs).toBe(R.errorLockoutMs);
+      expect(rs.falseStartPenaltyMs).toBe(R.falseStartPenaltyMs);
+      expect(rs.minReactionMs).toBe(R.minReactionMs);
+      expect(rs.splitMarks[rs.splitMarks.length - 1]).toBe(rs.distance);
+    }
+  });
+
+  it('set time standards at 60, 80, 100 and 120 WPM for every distance', () => {
+    expect(RULESETS['200m'].medalsMs).toEqual({ bronze: 40000, silver: 30000, gold: 24000, worldClass: 20000 });
+    expect(RULESETS['1500m'].medalsMs).toEqual({ bronze: 300000, silver: 225000, gold: 180000, worldClass: 150000 });
+    // The 100m keeps its original, approved values, which are the same speeds.
+    expect(RULESETS['100m'].medalsMs).toEqual({ bronze: 20000, silver: 15000, gold: 12000, worldClass: 10000 });
+  });
+
+  it('run a full race at every distance', () => {
+    for (const e of EVENT_IDS) {
+      const rs = RULESETS[e];
+      const text = 'ab '.repeat(Math.ceil(rs.distance / 3)).slice(0, rs.distance);
+      const log = [...text].map((ch, i) => ({ ch, t: 150 + i * 100 }));
+      const res = simulate(rs, text, log);
+      expect(res.finished).toBe(true);
+      expect(res.timeMs).toBe(150 + (rs.distance - 1) * 100);
+      expect(res.splits.map((sp) => sp.mark)).toEqual([...rs.splitMarks]);
+      expect(res.wpm).toBeCloseTo(rs.distance / 5 / ((res.timeMs as number) / 60000), 6);
+    }
+  });
+
+  it('look up rulesets and labels by event', () => {
+    expect(rulesetFor('400m')).toBe(RULESETS['400m']);
+    expect(rulesetFor('marathon')).toBe(R);
+    expect(rulesetFor(undefined)).toBe(R);
+    expect(eventLabel('1500m')).toBe('1500 M');
   });
 });
 
