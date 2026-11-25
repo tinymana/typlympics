@@ -412,12 +412,41 @@ try {
   await hostPage.keyboard.press('ArrowDown');
   await hostPage.keyboard.press('ArrowDown');
   await hostPage.keyboard.press('Enter');
+  // Stand in for last week having closed with the host taking gold.
+  mock.state.medals.push({ weekStart: '2026-11-16', rulesetId: '100m@1', device: 'keyboard', rank: 1, name: 'HOST ONE', nationality: 'USA', timeMs: 9500 });
   await sceneOn(hostPage, 'records');
-  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').board !== null, null, { timeout: 8000 });
+  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').week !== null, null, { timeout: 8000 });
   await sleep(200);
-  await hostPage.screenshot({ path: join(outDir, '25-world-records.png') });
-  const board = await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').board.boards['100m@1']);
-  check('World Records lists both athletes, fastest first', board.length === 2 && board[0].name === 'HOST ONE' && board[0].timeMs < board[1].timeMs);
+  await hostPage.screenshot({ path: join(outDir, '25-this-week.png') });
+  const weekBoard = await hostPage.evaluate(() => {
+    const w = window.__typlympics.scene.getScene('records').week;
+    return { rows: w.boards['100m@1'], last: w.lastWeek?.medals.length };
+  });
+  check("This Week lists both athletes, fastest first, with last week's medallist", weekBoard.rows.length === 2 && weekBoard.rows[0].name === 'HOST ONE' && weekBoard.last === 1);
+  await hostPage.keyboard.press('Enter'); // all time
+  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').allTime !== null, null, { timeout: 8000 });
+  await sleep(200);
+  await hostPage.screenshot({ path: join(outDir, '26-all-time.png') });
+  const board = await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').allTime.boards['100m@1']);
+  check('All Time lists both athletes, fastest first', board.length === 2 && board[0].name === 'HOST ONE' && board[0].timeMs < board[1].timeMs);
+  await hostPage.keyboard.press('Enter'); // hall of fame
+  await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').hallData !== null, null, { timeout: 8000 });
+  await sleep(200);
+  await hostPage.screenshot({ path: join(outDir, '27-hall-of-fame.png') });
+  const hall = await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').hallData);
+  check('the Hall of Fame shows the stored medal and the medal table', hall.month === '2026-11' && hall.medals.length === 1 && hall.medalTable[0].gold === 1);
+  await hostPage.keyboard.press('ArrowUp'); // phone boards
+  await sleep(150);
+  check('keyboard and phone boards switch', await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').phone === true));
+  await hostPage.keyboard.press('Escape');
+  await sceneOn(hostPage, 'title');
+  await hostPage.keyboard.press('ArrowUp'); // World Records -> Career
+  await hostPage.keyboard.press('Enter');
+  await sceneOn(hostPage, 'career');
+  await sleep(600);
+  await hostPage.screenshot({ path: join(outDir, '28-career-medals.png') });
+  const careerTexts = await hostPage.evaluate(() => window.__typlympics.scene.getScene('career').children.list.filter((o) => o.type === 'Text').map((o) => o.text));
+  check('the career page shows the athlete\'s weekly medals', careerTexts.some((t) => t.includes('GOLD 1   SILVER 0   BRONZE 0')) && careerTexts.some((t) => t.startsWith('Latest: GOLD 100M')), careerTexts.filter((t) => /GOLD|Latest/.test(t)).join(' | '));
 
   // ---------------------------------------------------------- phone: on-screen keyboard
   // A headless browser has no touch screen or phone keyboard, so the test

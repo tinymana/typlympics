@@ -17,6 +17,8 @@ export function createMockServer() {
   const sessions = new Map(); // token -> athlete
   const rooms = new Map(); // pin -> { pin, hostId, event, state, members: [{athlete, lane}], race }
   const races = new Map(); // id -> { id, event, seed, gunAt, entries: Map(athleteId -> entry) }
+  /** Weekly medals; tests add rows here to stand in for a week having closed. */
+  const medals = [];
   const bests = new Map(); // `${athleteId}|${rulesetId}` -> { athlete, rulesetId, timeMs, wpm }
   let nextId = 1;
   const id = (prefix) => `${prefix}-${nextId++}`;
@@ -41,7 +43,7 @@ export function createMockServer() {
 
   function handle(body) {
     const me = body.token ? sessions.get(body.token) : null;
-    const needAuth = !['enter', 'records'].includes(body.action);
+    const needAuth = !['enter', 'records', 'weekly', 'hall'].includes(body.action);
     if (needAuth && !me) return fail(401, 'signed_out', 'Sign in again.');
 
     switch (body.action) {
@@ -155,10 +157,37 @@ export function createMockServer() {
           all.filter((b) => b.device === device).sort((a, b) => b.wpm - a.wpm).map((b) => ({ name: b.athlete.name, nationality: b.athlete.nationality, wpm: b.wpm, rulesetId: b.rulesetId }));
         return ok({ boards, phoneBoards, topSpeed: speed('keyboard'), phoneTopSpeed: speed('phone'), mostWins: [] });
       }
+      case 'weekly': {
+        // Everything in the mock happened this week.
+        const boards = {};
+        const phoneBoards = {};
+        for (const b of [...bests.values()].sort((x, y) => x.timeMs - y.timeMs)) {
+          const list = ((b.device === 'phone' ? phoneBoards : boards)[b.rulesetId] ??= []);
+          list.push({ rank: list.length + 1, name: b.athlete.name, nationality: b.athlete.nationality, timeMs: b.timeMs, wpm: b.wpm });
+        }
+        const lastWeek = medals.length ? { weekStart: medals[0].weekStart, medals: medals.filter((m) => m.weekStart === medals[0].weekStart) } : null;
+        return ok({ weekStart: '2026-11-23', endsInMs: 4 * 86400000 + 3 * 3600000, boards, phoneBoards, lastWeek });
+      }
+      case 'hall': {
+        const months = [...new Set(medals.map((m) => m.weekStart.slice(0, 7)))].sort().reverse();
+        const month = body.month ?? months[0] ?? null;
+        const table = new Map();
+        for (const m of medals) {
+          const row = table.get(m.name) ?? { name: m.name, nationality: m.nationality, gold: 0, silver: 0, bronze: 0 };
+          row[['gold', 'silver', 'bronze'][m.rank - 1]] += 1;
+          table.set(m.name, row);
+        }
+        return ok({ months, month, medals: medals.filter((m) => m.weekStart.startsWith(month ?? '-')), medalTable: [...table.values()] });
+      }
+      case 'myMedals': {
+        const mine = medals.filter((m) => m.name === me.name);
+        const count = (rank) => mine.filter((m) => m.rank === rank).length;
+        return ok({ gold: count(1), silver: count(2), bronze: count(3), medals: mine });
+      }
       default:
         return fail(400, 'bad_action', 'Unknown action.');
     }
   }
 
-  return { handle, state: { athletes, rooms, races, bests } };
+  return { handle, state: { athletes, rooms, races, bests, medals } };
 }

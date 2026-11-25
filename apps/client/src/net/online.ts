@@ -79,6 +79,43 @@ export interface Records {
   mostWins: Array<{ name: string; nationality: string; wins: number }>;
 }
 
+export interface Medal {
+  /** Monday the week began, as YYYY-MM-DD (UTC). */
+  weekStart: string;
+  rulesetId: string;
+  device: 'keyboard' | 'phone';
+  /** 1 gold, 2 silver, 3 bronze. */
+  rank: number;
+  name: string;
+  nationality: string;
+  timeMs: number;
+}
+
+export interface Weekly {
+  weekStart: string;
+  /** Milliseconds until this week closes. */
+  endsInMs: number;
+  boards: Record<string, BoardRow[]>;
+  phoneBoards: Record<string, BoardRow[]>;
+  /** The most recently closed week and who took its medals. */
+  lastWeek: { weekStart: string; medals: Medal[] } | null;
+}
+
+export interface Hall {
+  /** Months that have medals, newest first, as YYYY-MM. */
+  months: string[];
+  month: string | null;
+  medals: Medal[];
+  medalTable: Array<{ name: string; nationality: string; gold: number; silver: number; bronze: number }>;
+}
+
+export interface MyMedals {
+  gold: number;
+  silver: number;
+  bronze: number;
+  medals: Medal[];
+}
+
 export class OnlineError extends Error {
   constructor(
     readonly code: string,
@@ -108,6 +145,9 @@ export interface OnlineApi {
   submit(token: string, raceId: string, log: Array<[number, string]>, device: 'keyboard' | 'phone'): Promise<OfficialResult>;
   results(token: string, raceId: string): Promise<{ done: boolean; entries: Standing[] }>;
   records(): Promise<Records>;
+  weekly(): Promise<Weekly>;
+  hall(month?: string): Promise<Hall>;
+  myMedals(token: string): Promise<MyMedals>;
 }
 
 type Json = Record<string, unknown>;
@@ -179,6 +219,29 @@ export function createOnlineApi(url: string = ONLINE_URL, fetchImpl: typeof fetc
         mostWins: (data['mostWins'] ?? []) as Records['mostWins'],
       };
     },
+    async weekly() {
+      const { data } = await call('weekly');
+      return {
+        weekStart: String(data['weekStart']),
+        endsInMs: Number(data['endsInMs']) || 0,
+        boards: (data['boards'] ?? {}) as Weekly['boards'],
+        phoneBoards: (data['phoneBoards'] ?? {}) as Weekly['phoneBoards'],
+        lastWeek: (data['lastWeek'] ?? null) as Weekly['lastWeek'],
+      };
+    },
+    async hall(month) {
+      const { data } = await call('hall', month ? { month } : {});
+      return {
+        months: (data['months'] ?? []) as string[],
+        month: (data['month'] ?? null) as string | null,
+        medals: (data['medals'] ?? []) as Medal[],
+        medalTable: (data['medalTable'] ?? []) as Hall['medalTable'],
+      };
+    },
+    async myMedals(token) {
+      const { data } = await call('myMedals', { token });
+      return { gold: Number(data['gold']) || 0, silver: Number(data['silver']) || 0, bronze: Number(data['bronze']) || 0, medals: (data['medals'] ?? []) as Medal[] };
+    },
   };
 }
 
@@ -188,6 +251,33 @@ export const online: OnlineApi = createOnlineApi();
 /** Local time of the gun, from a room answer that carries a race. */
 export function gunTimeFrom(answer: RoomAnswer): number | null {
   return answer.room.race ? answer.answeredAt + answer.room.race.gunInMs : null;
+}
+
+export const MEDAL_NAMES = ['GOLD', 'SILVER', 'BRONZE'] as const;
+export const MEDAL_COLORS = ['#ffd23f', '#d9dde8', '#e0915a'] as const;
+
+/** "NOV 23" from a YYYY-MM-DD week start, without time zone surprises. */
+export function weekLabel(weekStart: string): string {
+  const [, m, d] = weekStart.split('-').map(Number);
+  const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][(m ?? 1) - 1] ?? '';
+  return `${month} ${d ?? ''}`.trim();
+}
+
+/** "NOVEMBER 2026" from YYYY-MM. */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const name = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'][(m ?? 1) - 1] ?? '';
+  return `${name} ${y ?? ''}`.trim();
+}
+
+/** "4D 3H", "5H 12M" or "8M" until the week closes. */
+export function countdown(ms: number): string {
+  const mins = Math.max(0, Math.floor(ms / 60000));
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  if (d > 0) return `${d}D ${h}H`;
+  if (h > 0) return `${h}H ${mins % 60}M`;
+  return `${mins}M`;
 }
 
 export function ordinal(place: number): string {

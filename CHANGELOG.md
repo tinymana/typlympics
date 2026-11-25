@@ -5,6 +5,22 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (weekly medals)
+
+- Database (migration 0004): `weekly_medals`, `weeks_closed` and the
+  function `typlympics.close_weeks()`, which awards gold, silver and
+  bronze per distance and device for every finished week, once. Weeks run
+  Monday 00:00 UTC to the next Monday. Equal times share a medal. There is
+  no scheduled job: a finished week is closed by the first request that
+  arrives after it ends.
+- API actions `weekly` (this week's standings, time left, last week's
+  medallists), `hall` (medals by month, all-time medal table) and
+  `myMedals`.
+- World Records has three boards, cycled with Enter: This Week, All Time
+  and Hall of Fame.
+- Career page shows the athlete's medal count; the title screen announces
+  newly won medals once per week won.
+
 ### Added (invites)
 
 - Race room invites (`net/invite.ts`): on touch devices an Invite button
