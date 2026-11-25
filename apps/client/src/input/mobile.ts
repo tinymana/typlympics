@@ -173,6 +173,11 @@ class MobileUi {
     return this.enabled && !this.keyboardFocused() && !physicalKeyboardSeen();
   }
 
+  /** Best guess at what this player types on, before a race has shown it for certain. */
+  likelyDevice(): Device {
+    return this.enabled && !physicalKeyboardSeen() ? 'phone' : 'keyboard';
+  }
+
   /** Puts the phone keyboard away, which brings the menu buttons back. */
   closeKeyboard(): void {
     this.input?.blur();

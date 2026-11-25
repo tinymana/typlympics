@@ -15,6 +15,8 @@ export interface OnlineAthlete {
 
 export interface RoomMember extends OnlineAthlete {
   lane: number;
+  /** What the athlete is playing on, as their game reports it. */
+  device?: 'keyboard' | 'phone';
 }
 
 export interface RoomRace {
@@ -48,6 +50,8 @@ export interface OfficialResult {
 }
 
 export interface Standing extends RoomMember {
+  /** What the result was typed on. */
+  device?: 'keyboard' | 'phone';
   status: 'racing' | 'finished' | 'dnf' | 'review';
   place: number | null;
   timeMs: number | null;
@@ -136,9 +140,9 @@ export interface RoomAnswer {
 
 export interface OnlineApi {
   enter(name: string, nationality: string, pin: string): Promise<{ token: string; created: boolean; athlete: OnlineAthlete }>;
-  host(token: string, event: string): Promise<RoomAnswer>;
-  join(token: string, pin: string): Promise<RoomAnswer>;
-  room(token: string, pin: string): Promise<RoomAnswer>;
+  host(token: string, event: string, device: 'keyboard' | 'phone'): Promise<RoomAnswer>;
+  join(token: string, pin: string, device: 'keyboard' | 'phone'): Promise<RoomAnswer>;
+  room(token: string, pin: string, device: 'keyboard' | 'phone'): Promise<RoomAnswer>;
   leave(token: string, pin: string): Promise<void>;
   start(token: string, pin: string, event: string): Promise<RoomAnswer>;
   tick(token: string, raceId: string, pos: number): Promise<Position[]>;
@@ -190,9 +194,9 @@ export function createOnlineApi(url: string = ONLINE_URL, fetchImpl: typeof fetc
       const { data } = await call('enter', { name, nationality, pin });
       return { token: String(data['token']), created: data['created'] === true, athlete: data['athlete'] as OnlineAthlete };
     },
-    host: (token, event) => roomCall('host', { token, event }),
-    join: (token, pin) => roomCall('join', { token, pin }),
-    room: (token, pin) => roomCall('room', { token, pin }),
+    host: (token, event, device) => roomCall('host', { token, event, device }),
+    join: (token, pin, device) => roomCall('join', { token, pin, device }),
+    room: (token, pin, device) => roomCall('room', { token, pin, device }),
     async leave(token, pin) {
       await call('leave', { token, pin });
     },

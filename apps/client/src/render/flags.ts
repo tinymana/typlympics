@@ -36,3 +36,59 @@ export function addFlag(scene: Phaser.Scene, x: number, y: number, code: string,
 export function flagWidth(scale = 2): number {
   return (FLAG_W + 2) * scale;
 }
+
+// ------------------------------------------------------------ device icons
+
+/** Pixel icons that show what an athlete played on: a monitor or a phone. */
+const DEVICE_ART: Record<'keyboard' | 'phone', string[]> = {
+  keyboard: [
+    '############',
+    '#oooooooooo#',
+    '#oooooooooo#',
+    '#oooooooooo#',
+    '#oooooooooo#',
+    '#oooooooooo#',
+    '############',
+    '....####....',
+    '..########..',
+  ],
+  phone: [
+    '.#####.',
+    '#######',
+    '#ooooo#',
+    '#ooooo#',
+    '#ooooo#',
+    '#ooooo#',
+    '#ooooo#',
+    '#ooooo#',
+    '#######',
+    '###.###',
+    '.#####.',
+  ],
+};
+
+export function ensureDeviceTextures(scene: Phaser.Scene): void {
+  for (const [device, art] of Object.entries(DEVICE_ART)) {
+    const key = `device_${device}`;
+    if (scene.textures.exists(key)) continue;
+    const tex = scene.textures.createCanvas(key, (art[0] as string).length, art.length);
+    if (!tex) continue;
+    art.forEach((row, y) => {
+      [...row].forEach((ch, x) => {
+        if (ch === '.') return;
+        tex.context.fillStyle = ch === '#' ? '#f4f4ff' : device === 'phone' ? '#ff8fb8' : '#4a90d9';
+        tex.context.fillRect(x, y, 1, 1);
+      });
+    });
+    tex.refresh();
+  }
+}
+
+export function deviceKey(device: string | null | undefined): string {
+  return device === 'phone' ? 'device_phone' : 'device_keyboard';
+}
+
+/** Adds a keyboard or phone icon. Origin is the left edge, vertically centred. */
+export function addDeviceIcon(scene: Phaser.Scene, x: number, y: number, device: string | null | undefined, scale = 2): Phaser.GameObjects.Image {
+  return scene.add.image(x, y, deviceKey(device)).setOrigin(0, 0.5).setScale(scale);
+}

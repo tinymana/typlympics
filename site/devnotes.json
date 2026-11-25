@@ -2,6 +2,21 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.12",
+      "date": "2026-11-24",
+      "title": "Keyboard or phone, at a glance",
+      "items": [
+        {
+          "tag": "new",
+          "text": "A little pixel monitor or phone now sits beside every athlete's name: in the race room, above rivals on the track, in the finish standings and on the World Records boards."
+        },
+        {
+          "tag": "improved",
+          "text": "The finish standings in online races now show flags alongside places and times."
+        }
+      ]
+    },
+    {
       "version": "0.11.1",
       "date": "2026-11-24",
       "title": "iPad fixes",

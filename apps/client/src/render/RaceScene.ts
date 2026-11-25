@@ -59,7 +59,7 @@ import {
   TRACK_TOP,
   laneFeetY,
 } from './layout';
-import { addFlag, flagKey, flagWidth } from './flags';
+import { addDeviceIcon, addFlag, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
 import { topLineFor, wrapLines, type TextLine } from './textLines';
 
@@ -82,6 +82,7 @@ interface Opponent {
   runner: Runner;
   tag: Phaser.GameObjects.Text;
   flag: Phaser.GameObjects.Image;
+  icon: Phaser.GameObjects.Image;
   pos: number;
 }
 
@@ -189,6 +190,7 @@ export class RaceScene extends Phaser.Scene {
   private tickBusy = false;
   private official: OfficialResult | null = null;
   private standingsDone = false;
+  private standingObjects: Phaser.GameObjects.GameObject[] = [];
   /** What the race just finished was typed on. */
   private device: Device = 'keyboard';
   private finishedAt = 0;
@@ -278,7 +280,8 @@ export class RaceScene extends Phaser.Scene {
           .setOrigin(0.5, 1)
           .setDepth(20 + m.lane);
         const flag = addFlag(this, 0, 0, m.nationality).setOrigin(1, 1).setDepth(20 + m.lane);
-        this.opponents.push({ id: m.id, runner, tag, flag, pos: 0 });
+        const icon = addDeviceIcon(this, 0, 0, m.device, 1.5).setOrigin(0, 1).setDepth(20 + m.lane);
+        this.opponents.push({ id: m.id, runner, tag, flag, icon, pos: 0 });
       }
     }
     this.ghost.sprite.setTint(0x9fd0ff);
@@ -806,10 +809,27 @@ export class RaceScene extends Phaser.Scene {
     p.medal
       .setText(done ? `OFFICIAL TIME ${official?.timeMs != null ? formatTime(official.timeMs) : '--.--'}` : 'WAITING FOR THE OTHER ATHLETES . . .')
       .setColor(done ? COLORS.gold : COLORS.ice);
-    const line = (e: Standing): string =>
-      `${e.place ? ordinal(e.place) : e.status === 'racing' ? '...' : 'DNF'} ${e.nationality} ${e.name} ${e.timeMs != null && e.place ? formatTime(e.timeMs) : ''}`.trim();
-    p.stats.setText(entries.slice(0, 2).map(line).join('     '));
-    p.splits.setText(entries.slice(2, 4).map(line).join('     ')).setColor(COLORS.ice);
+    // Standings as a two-by-two grid: place, flag, name, keyboard or phone, time.
+    p.stats.setText('');
+    p.splits.setText('');
+    for (const o of this.standingObjects) o.destroy();
+    this.standingObjects = [];
+    const add = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
+      this.standingObjects.push(obj);
+      this.panel.add(obj);
+      return obj;
+    };
+    const style = (color: string): Phaser.Types.GameObjects.Text.TextStyle => ({ fontFamily: FONT_MONO, fontSize: '16px', fontStyle: 'bold', color });
+    entries.slice(0, 4).forEach((e, i) => {
+      const x = -312 + (i % 2) * 320;
+      const y = 62 + Math.floor(i / 2) * 28;
+      const color = e.id === race.you ? COLORS.gold : COLORS.white;
+      add(this.add.text(x, y, e.place ? ordinal(e.place) : e.status === 'racing' ? '...' : 'DNF', style(color)).setOrigin(0, 0.5));
+      add(addFlag(this, x + 44, y, e.nationality, 1.5));
+      const name = add(this.add.text(x + 76, y, e.name, style(color)).setOrigin(0, 0.5));
+      add(addDeviceIcon(this, name.x + name.width + 6, y, e.device, 1.5));
+      add(this.add.text(x + 300, y, e.timeMs != null && e.place ? formatTime(e.timeMs) : '', style(COLORS.ice)).setOrigin(1, 0.5));
+    });
   }
 
   /** Reports progress and reads everyone else's, a few times a second. */
@@ -1021,6 +1041,7 @@ export class RaceScene extends Phaser.Scene {
         this.setFrame(o.runner, oFrame);
         o.tag.setPosition(o.runner.sprite.x + flagWidth() / 2 + 2, o.runner.sprite.y - 98);
         o.flag.setPosition(o.tag.x - o.tag.width / 2 - 4, o.tag.y - 1);
+        o.icon.setPosition(o.tag.x + o.tag.width / 2 + 5, o.tag.y - 1);
       }
     }
 

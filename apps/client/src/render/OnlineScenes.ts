@@ -22,7 +22,7 @@ import {
 } from '../net/online';
 import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, persistSave, type KeyValueStore, type Profile, type Save } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
-import { addFlag, flagKey, flagWidth } from './flags';
+import { addDeviceIcon, addFlag, deviceKey, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
 
@@ -131,7 +131,7 @@ export class CompeteScene extends Phaser.Scene {
     const token = this.ctx.profile.online?.token;
     if (!pin || !token) return;
     await this.run(async () => {
-      const answer = await online.join(token, pin);
+      const answer = await online.join(token, pin, mobile.likelyDevice());
       this.scene.start('lobby', { pin: answer.room.pin });
     }, 'menu');
   }
@@ -210,7 +210,7 @@ export class CompeteScene extends Phaser.Scene {
     }
     if (this.step === 'host') {
       await this.run(async () => {
-        const answer = await online.host(token, EVENT_IDS[this.eventIndex] as EventId);
+        const answer = await online.host(token, EVENT_IDS[this.eventIndex] as EventId, mobile.likelyDevice());
         this.scene.start('lobby', { pin: answer.room.pin });
       }, 'host');
     } else if (this.step === 'join') {
@@ -220,7 +220,7 @@ export class CompeteScene extends Phaser.Scene {
       }
       const pin = this.typed;
       await this.run(async () => {
-        const answer = await online.join(token, pin);
+        const answer = await online.join(token, pin, mobile.likelyDevice());
         this.scene.start('lobby', { pin: answer.room.pin });
       }, 'join');
     }
@@ -307,7 +307,7 @@ export class LobbyScene extends Phaser.Scene {
   /** The host has pressed start and the server has not answered yet. */
   private starting = false;
   private leaving = false;
-  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image }> = [];
+  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = [];
   private eventText!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private note!: Phaser.GameObjects.Text;
@@ -352,6 +352,7 @@ export class LobbyScene extends Phaser.Scene {
       this.add.text(446, y + 3, `${i + 1}`, mono(24, COLORS.dim)).setOrigin(0, 0.5);
       this.lanes.push({
         flag: addFlag(this, 486, y + 3, 'USA').setVisible(false),
+        icon: addDeviceIcon(this, 486, y + 3, 'keyboard').setVisible(false),
         name: this.add.text(486, y + 3, '', mono(20, COLORS.white)).setOrigin(0, 0.5),
         tag: this.add.text(866, y + 3, '', mono(13, COLORS.gold)).setOrigin(1, 0.5),
       });
@@ -399,7 +400,7 @@ export class LobbyScene extends Phaser.Scene {
     if (this.polling || this.starting || this.leaving) return;
     this.polling = true;
     try {
-      const answer = await online.room(this.token(), this.pin);
+      const answer = await online.room(this.token(), this.pin, mobile.likelyDevice());
       // A start that happened while this poll was in flight is newer than it.
       if (!this.starting) this.apply(answer);
     } catch (e) {
@@ -481,6 +482,9 @@ export class LobbyScene extends Phaser.Scene {
         .setText(m ? m.name : 'OPEN')
         .setX(m ? 486 + flagWidth() + 10 : 486)
         .setColor(m ? COLORS.white : COLORS.dim);
+      // Keyboard or phone, right after the name.
+      lane.icon.setVisible(!!m);
+      if (m) lane.icon.setTexture(deviceKey(m.device)).setX(lane.name.x + lane.name.width + 10);
       lane.tag.setText(m ? [m.id === room.hostId ? 'HOST' : '', m.id === this.you ? 'YOU' : ''].filter(Boolean).join('  ') : '');
     });
     if (room.state === 'racing') this.status.setText('RACE IN PROGRESS: YOU ARE IN THE NEXT ONE');
@@ -636,7 +640,8 @@ export class RecordsScene extends Phaser.Scene {
       const color = MEDAL_COLORS[r.rank - 1] ?? COLORS.white;
       this.put(this.add.text(46, y, `${r.rank}`, mono(18, color)));
       this.put(addFlag(this, 84, y + 10, r.nationality));
-      this.put(this.add.text(84 + flagWidth() + 8, y, r.name, mono(18, color)));
+      const name = this.put(this.add.text(84 + flagWidth() + 8, y, r.name, mono(18, color)));
+      this.put(addDeviceIcon(this, name.x + name.width + 8, y + 10, this.phone ? 'phone' : 'keyboard', 1.5));
       this.put(this.add.text(430, y, formatTime(r.timeMs), mono(18, color)).setOrigin(1, 0));
       this.put(this.add.text(534, y, `${Math.round(r.wpm)}`, mono(18, COLORS.ice)).setOrigin(1, 0));
     });
@@ -726,7 +731,8 @@ export class RecordsScene extends Phaser.Scene {
       this.put(this.add.text(46, y, weekLabel(m.weekStart), mono(15, COLORS.ice)));
       this.put(this.add.text(150, y, MEDAL_NAMES[m.rank - 1] ?? '', mono(15, color)));
       this.put(addFlag(this, 244, y + 9, m.nationality, 1.5));
-      this.put(this.add.text(280, y, m.name, mono(15, color)));
+      const who = this.put(this.add.text(280, y, m.name, mono(15, color)));
+      this.put(addDeviceIcon(this, who.x + who.width + 8, y + 9, m.device, 1.5));
       this.put(this.add.text(534, y, formatTime(m.timeMs), mono(15, color)).setOrigin(1, 0));
     });
     this.drawSide(

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { createRng } from '@typlympics/content';
-import { ensureFlagTextures } from './flags';
+import { ensureDeviceTextures, ensureFlagTextures } from './flags';
 
 /**
  * Every texture is drawn in code from rectangles: original placeholder art
@@ -244,6 +244,7 @@ function drawAthlete(ctx: Ctx, pose: Pose): void {
 
 export function ensureTextures(scene: Phaser.Scene): void {
   ensureFlagTextures(scene);
+  ensureDeviceTextures(scene);
   makeTexture(scene, 'sky', 480, 100, 1, drawSky);
   makeTexture(scene, 'stands', 240, 71, S, drawStands);
   makeTexture(scene, 'track', 32, 20, S, drawTrack);

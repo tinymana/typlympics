@@ -409,11 +409,11 @@ try {
   await sceneOn(hostPage, 'compete');
   await hostPage.keyboard.press('Escape');
   await sceneOn(hostPage, 'title');
+  // Stand in for last week having closed with the host taking gold.
+  mock.state.medals.push({ weekStart: '2026-11-16', rulesetId: '100m@1', device: 'keyboard', rank: 1, name: 'HOST ONE', nationality: 'USA', timeMs: 9500 });
   await hostPage.keyboard.press('ArrowDown');
   await hostPage.keyboard.press('ArrowDown');
   await hostPage.keyboard.press('Enter');
-  // Stand in for last week having closed with the host taking gold.
-  mock.state.medals.push({ weekStart: '2026-11-16', rulesetId: '100m@1', device: 'keyboard', rank: 1, name: 'HOST ONE', nationality: 'USA', timeMs: 9500 });
   await sceneOn(hostPage, 'records');
   await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').week !== null, null, { timeout: 8000 });
   await sleep(200);
@@ -422,7 +422,7 @@ try {
     const w = window.__typlympics.scene.getScene('records').week;
     return { rows: w.boards['100m@1'], last: w.lastWeek?.medals.length };
   });
-  check("This Week lists both athletes, fastest first, with last week's medallist", weekBoard.rows.length === 2 && weekBoard.rows[0].name === 'HOST ONE' && weekBoard.last === 1);
+  check("This Week lists both athletes, fastest first, with last week's medallist", weekBoard.rows.length === 2 && weekBoard.rows[0].name === 'HOST ONE' && weekBoard.last === 1, JSON.stringify(weekBoard));
   await hostPage.keyboard.press('Enter'); // all time
   await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('records').allTime !== null, null, { timeout: 8000 });
   await sleep(200);
