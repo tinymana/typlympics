@@ -15,7 +15,11 @@ export interface MedalTimesMs {
 
 export type EventId = '100m' | '200m' | '400m' | '800m' | '1500m';
 
-export const EVENT_IDS: readonly EventId[] = Object.freeze(['100m', '200m', '400m', '800m', '1500m']);
+/**
+ * The distances on offer. The 1500 m was retired in v0.14 (too long to be
+ * fun); its ruleset stays defined so old results can still be checked.
+ */
+export const EVENT_IDS: readonly EventId[] = Object.freeze(['100m', '200m', '400m', '800m']);
 
 export interface SprintRuleset {
   readonly id: string;

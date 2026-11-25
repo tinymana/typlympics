@@ -14,6 +14,7 @@
 // @ts-expect-error Deno resolves npm: specifiers at runtime.
 import postgres from 'npm:postgres@3.4.5';
 import { generateSprintLine } from '../../../packages/content/src/generator';
+import { nameAllowed } from '../../../packages/content/src/names';
 import { EVENT_IDS, RULESETS, simulate, type EventId, type InputEvent } from '../../../packages/sim/src/index';
 
 declare const Deno: { env: { get(name: string): string | undefined }; serve(handler: (req: Request) => Promise<Response> | Response): void };
@@ -93,6 +94,7 @@ async function enter(body: Body): Promise<Row> {
            coalesce(locked_until > now(), false) as locked
     from typlympics.athletes where name = ${name}`;
   if (rows.length === 0) {
+    if (!nameAllowed(name)) throw new ApiError('bad_name', 'Pick another name.');
     if (!/^[A-Z]{3}$/.test(nationality)) throw new ApiError('bad_nationality', 'A nationality is required for a new athlete.');
     rows = await sql`
       insert into typlympics.athletes (name, nationality, pin_hash)

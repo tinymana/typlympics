@@ -3,7 +3,7 @@ import { SPRINT_100M_V1, formatTime } from '@typlympics/sim';
 import menuBoxUrl from '../assets/menu_box.png';
 import menuRowsUrl from '../assets/menu_rows.png';
 import titleArtUrl from '../assets/title_art.webp';
-import { Sfx } from '../audio/sfx';
+import { Sfx, isMuted, setMuted } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { hasPendingInvite } from '../net/invite';
 import { MEDAL_NAMES, online, weekLabel, type Medal } from '../net/online';
@@ -42,6 +42,7 @@ let lastSelected = 0;
  * as drawn while the menu itself is live.
  */
 export class TitleScene extends Phaser.Scene {
+  private soundText!: Phaser.GameObjects.Text;
   private detach: (() => void) | null = null;
   private rows: Phaser.GameObjects.Image[] = [];
   private cursor!: Phaser.GameObjects.Text;
@@ -98,6 +99,11 @@ export class TitleScene extends Phaser.Scene {
     addFlag(this, 12, 19, profile.nationality);
     this.add.text(12 + flagWidth() + 8, 8, profile.name, label(18, COLORS.white));
     this.add.text(12, 32, 'ESC: SWITCH ATHLETE', label(12, COLORS.ice));
+    // Sound switch: M on a keyboard, or tap the label.
+    this.soundText = this.add.text(12, 52, '', label(12, COLORS.ice)).setInteractive({ useHandCursor: true });
+    this.soundText.setPadding(0, 4, 12, 8);
+    this.soundText.on('pointerdown', () => this.toggleSound());
+    this.showSound();
 
     // Personal best, top right.
     const rec = profile.records[SPRINT_100M_V1.id];
@@ -117,6 +123,7 @@ export class TitleScene extends Phaser.Scene {
     this.detach = attachKeyboard(window, {
       onChar: (ch) => {
         if (ch === ' ') this.choose();
+        else if (ch === 'm') this.toggleSound();
       },
       onControl: (key) => this.onControl(key),
     });
@@ -168,6 +175,17 @@ export class TitleScene extends Phaser.Scene {
       .catch(() => {
         medalsChecked = false; // offline now; try again next time the title shows
       });
+  }
+
+  private toggleSound(): void {
+    setMuted(!isMuted());
+    this.sfx.unlock();
+    this.showSound();
+    this.sfx.marks();
+  }
+
+  private showSound(): void {
+    this.soundText.setText(isMuted() ? 'M: SOUND OFF' : 'M: SOUND ON').setColor(isMuted() ? COLORS.red : COLORS.ice);
   }
 
   private onControl(key: ControlKey): void {

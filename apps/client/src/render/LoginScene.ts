@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { nameAllowed } from '@typlympics/content';
 import { SPRINT_100M_V1, formatTime } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
@@ -257,6 +258,10 @@ export class LoginScene extends Phaser.Scene {
       const name = normalizeName(this.nameText);
       if (!name) {
         this.fail('TYPE A NAME FIRST');
+        return;
+      }
+      if (!nameAllowed(name)) {
+        this.fail('PICK ANOTHER NAME');
         return;
       }
       this.nameText = name;
