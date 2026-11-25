@@ -260,6 +260,7 @@ try {
   await page.keyboard.press('Enter');
   const rr = await runRace({ gapMs: 45 });
   await page.screenshot({ path: join(outDir, '10-rival-result.png') });
+  check('beating a rival throws confetti', await page.evaluate(() => window.__typlympics.scene.getScene('race').confettiThrown === true));
   const afterRival = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles['smoke-test']);
   check('beating a rival is recorded for the athlete', rr.finished && afterRival.rivalsBeaten['100m@1']?.includes('turtle'), JSON.stringify(afterRival.rivalsBeaten));
   await page.keyboard.press('Escape');
@@ -377,6 +378,8 @@ try {
   await Promise.all([standingsDone(hostPage), standingsDone(guestPage)]);
   await sleep(500);
   await hostPage.screenshot({ path: join(outDir, '23-online-result-host.png') });
+  check('winning an online race throws confetti', await hostPage.evaluate(() => window.__typlympics.scene.getScene('race').confettiThrown === true));
+  check('the runner-up gets no confetti', await guestPage.evaluate(() => window.__typlympics.scene.getScene('race').confettiThrown === false));
   await guestPage.screenshot({ path: join(outDir, '24-online-result-guest.png') });
   const headline = (p) => p.evaluate(() => window.__typlympics.scene.getScene('race').panelText.headline.text);
   const [headA, headB] = await Promise.all([headline(hostPage), headline(guestPage)]);

@@ -2,6 +2,17 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.13.1",
+      "date": "2026-11-24",
+      "title": "Confetti",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Confetti falls on the finish screen when you beat a rival, set a new personal best, win an online race or break a world record."
+        }
+      ]
+    },
+    {
       "version": "0.13",
       "date": "2026-11-24",
       "title": "The world record to beat",
