@@ -2,6 +2,25 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.13",
+      "date": "2026-11-24",
+      "title": "The world record to beat",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Online races now show the world record for your distance in the top corner, next to your own best."
+        },
+        {
+          "tag": "new",
+          "text": "Beat it and the finish screen announces NEW WORLD RECORD."
+        },
+        {
+          "tag": "improved",
+          "text": "The This Week board shows the world record to beat. Weekly standings start fresh every Monday; world records and Most Race Wins are never wiped."
+        }
+      ]
+    },
+    {
       "version": "0.12",
       "date": "2026-11-24",
       "title": "Keyboard or phone, at a glance",

@@ -27,7 +27,7 @@ import {
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { mobile, type Device } from '../input/mobile';
-import { online as onlineApi, ordinal, type OfficialResult, type RoomMember, type Standing } from '../net/online';
+import { online as onlineApi, ordinal, worldRecord, type OfficialResult, type Records, type RoomMember, type Standing } from '../net/online';
 import {
   activeProfile,
   addToHistory,
@@ -182,6 +182,8 @@ export class RaceScene extends Phaser.Scene {
   private wonAgainstRival = false;
   /** Set for a live online race; null in Train. */
   private online: OnlineRace | null = null;
+  /** The all-time boards as they stood when this race began, for the record to beat. */
+  private allTime: Records | null = null;
   private opponents: Opponent[] = [];
   private playerLane = PLAYER_LANE;
   /** The player's flag, carried above their athlete down the track. */
@@ -270,6 +272,17 @@ export class RaceScene extends Phaser.Scene {
     this.official = null;
     this.standingsDone = false;
     this.tickBusy = false;
+    this.allTime = null;
+    if (this.online) {
+      // The record to beat. If the boards cannot be fetched the race goes on without it.
+      void onlineApi
+        .records()
+        .then((r) => {
+          this.allTime = r;
+          if (this.scene.isActive() && this.pbText) this.showBests();
+        })
+        .catch(() => undefined);
+    }
     if (this.online) {
       for (const m of this.online.members) {
         if (m.id === this.online.you) continue;
@@ -522,7 +535,7 @@ export class RaceScene extends Phaser.Scene {
     this.timerText.setText('0.00').setColor(COLORS.white);
     this.metresText.setText('0 m');
     this.wpmText.setText('');
-    this.pbText.setText(this.pbTimeMs !== null ? `PB ${formatTime(this.pbTimeMs)}` : 'PB --.--');
+    this.showBests();
     this.panel.setVisible(false);
     this.promptText.setText('ENTER or TAB: RACE AGAIN');
     this.showBanner('ON YOUR MARKS', COLORS.white);
@@ -673,7 +686,10 @@ export class RaceScene extends Phaser.Scene {
 
     this.timerText.setText(formatTime(timeMs)).setColor(COLORS.gold);
     this.metresText.setText(`${this.ruleset.distance} m`);
-    if (isRecord) this.pbText.setText(`PB ${formatTime(timeMs)}`);
+    if (isRecord) {
+      this.pbTimeMs = timeMs;
+      this.showBests();
+    }
     // Against a rival, the race is won by crossing the line first.
     let sweep = false;
     const rivalTime = this.rival ? ((this.laneTimes?.[this.ruleset.distance - 1] as number | undefined) ?? null) : null;
@@ -795,6 +811,20 @@ export class RaceScene extends Phaser.Scene {
     this.time.addEvent({ delay: RESULT_POLL_MS, repeat: RESULT_POLLS_MAX, callback: () => void poll() });
   }
 
+  /** Top right of the screen: the world record to beat (online) and your own best. */
+  private showBests(): void {
+    const pb = this.pbTimeMs !== null ? `PB ${formatTime(this.pbTimeMs)}` : 'PB --.--';
+    const wr = this.online ? worldRecord(this.allTime, this.ruleset.id, mobile.likelyDevice()) : null;
+    this.pbText.setText(wr ? `WR ${formatTime(wr.timeMs)}   ${pb}` : pb);
+  }
+
+  /** True when an official time beats the world record that stood at the start. */
+  private brokeWorldRecord(timeMs: number | null | undefined): boolean {
+    if (timeMs == null || !this.allTime) return false;
+    const wr = worldRecord(this.allTime, this.ruleset.id, mobile.raceDevice());
+    return wr === null || timeMs < wr.timeMs;
+  }
+
   private showStandings(race: OnlineRace, entries: Standing[], done: boolean): void {
     const p = this.panelText;
     const me = entries.find((e) => e.id === race.you);
@@ -802,7 +832,11 @@ export class RaceScene extends Phaser.Scene {
     if (official?.status === 'review') {
       p.headline.setText('RESULT HELD FOR REVIEW').setColor(COLORS.red);
     } else if (me?.place) {
-      p.headline.setText(`${ordinal(me.place)} PLACE${done ? '' : ' SO FAR'}${official?.personalBest ? '   ONLINE BEST!' : ''}`).setColor(me.place === 1 ? COLORS.gold : COLORS.ice);
+      // A world record needs the fastest time on that device in this race too.
+      const fastestOnDevice = !entries.some((e) => e.id !== race.you && e.device === me.device && e.timeMs != null && me.timeMs != null && e.timeMs < me.timeMs);
+      const record = official?.status === 'finished' && fastestOnDevice && this.brokeWorldRecord(official.timeMs);
+      const extra = record ? '   NEW WORLD RECORD!' : official?.personalBest ? '   ONLINE BEST!' : '';
+      p.headline.setText(`${ordinal(me.place)} PLACE${done ? '' : ' SO FAR'}${extra}`).setColor(me.place === 1 || record ? COLORS.gold : COLORS.ice);
     } else {
       p.headline.setText('DID NOT FINISH').setColor(COLORS.ice);
     }
