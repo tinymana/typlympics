@@ -58,6 +58,10 @@ function str(body: Body, key: string): string {
   return v;
 }
 
+function deviceOf(body: Body): 'keyboard' | 'phone' {
+  return body['device'] === 'phone' ? 'phone' : 'keyboard';
+}
+
 function normalizeName(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 12).trim();
 }
@@ -155,7 +159,7 @@ async function roomState(pin: string): Promise<Row> {
   const room = rooms[0];
   if (!room) throw new ApiError('no_room', 'No race room has that PIN.', 404);
   const members: Row[] = await sql`
-    select a.id, a.name, a.nationality, m.lane
+    select a.id, a.name, a.nationality, m.lane, m.device
     from typlympics.room_members m join typlympics.athletes a on a.id = m.athlete_id
     where m.pin = ${pin} order by m.lane`;
   let race: Row | null = null;
@@ -198,7 +202,7 @@ async function host(body: Body): Promise<Row> {
       insert into typlympics.rooms (pin, host_id, event) values (${pin}, ${me.id}, ${event})
       on conflict (pin) do nothing returning pin`;
     if (made.length) {
-      await sql`insert into typlympics.room_members (pin, athlete_id, lane) values (${pin}, ${me.id}, 0)`;
+      await sql`insert into typlympics.room_members (pin, athlete_id, lane, device) values (${pin}, ${me.id}, 0, ${deviceOf(body)})`;
       return { room: await roomState(pin), you: me.id };
     }
   }
@@ -218,8 +222,8 @@ async function join(body: Body): Promise<Row> {
     // Leave any other room first, then take the lowest free lane.
     await sql`delete from typlympics.room_members where athlete_id = ${me.id}`;
     const seated: Row[] = await sql`
-      insert into typlympics.room_members (pin, athlete_id, lane)
-      select ${pin}, ${me.id}, lane from generate_series(0, ${MAX_PLAYERS - 1}) as lane
+      insert into typlympics.room_members (pin, athlete_id, lane, device)
+      select ${pin}, ${me.id}, lane, ${deviceOf(body)} from generate_series(0, ${MAX_PLAYERS - 1}) as lane
       where lane not in (select lane from typlympics.room_members where pin = ${pin})
       order by lane limit 1
       on conflict do nothing returning lane`;
@@ -232,7 +236,10 @@ async function join(body: Body): Promise<Row> {
 async function room(body: Body): Promise<Row> {
   const me = await auth(body);
   const pin = str(body, 'pin');
-  const seen: Row[] = await sql`update typlympics.room_members set last_seen = now() where pin = ${pin} and athlete_id = ${me.id} returning 1`;
+  // The device is refreshed on every check-in: plugging in a keyboard changes it.
+  const seen: Row[] = await sql`
+    update typlympics.room_members set last_seen = now(), device = ${deviceOf(body)}
+    where pin = ${pin} and athlete_id = ${me.id} returning 1`;
   if (seen.length === 0) throw new ApiError('not_member', 'You are not in that room.', 403);
   await pruneRoom(pin);
   await expireRace(pin);
@@ -298,7 +305,7 @@ async function submit(body: Body): Promise<Row> {
 
   const ruleset = RULESETS[race.event as EventId];
   // Reported by the client: a phone's on-screen keyboard, or a physical keyboard.
-  const device = body['device'] === 'phone' ? 'phone' : 'keyboard';
+  const device = deviceOf(body);
   const log = parseLog(body['log'], ruleset.distance);
   const text = generateSprintLine(race.seed as string, ruleset.distance).text;
   let result;
