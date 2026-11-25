@@ -37,7 +37,7 @@ Text generator version 1: difficulty band 5.5 to 13.5 (about the 15th to
 - Should the text appear at "On your marks" or only at the gun?
 - Are the medal times right for a first-session player?
 
-## 200m, 400m, 800m and 1500m
+## 200m, 400m and 800m (1500m retired in v0.14)
 
 Status: **provisional.** Built on 2026-11-24 after the creative director
 set the event list and asked to keep going; the details below are my
@@ -48,7 +48,7 @@ defaults and await confirmation.
 | 200m | `200m@1` | 200 characters | 50, 100, 150, 200 m | 40.00, 30.00, 24.00, 20.00 s |
 | 400m | `400m@1` | 400 characters | 100, 200, 300, 400 m | 1:20.00, 1:00.00, 48.00, 40.00 s |
 | 800m | `800m@1` | 800 characters | 200, 400, 600, 800 m | 2:40.00, 2:00.00, 1:36.00, 1:20.00 |
-| 1500m | `1500m@1` | 1,500 characters | 400, 800, 1200, 1500 m | 5:00.00, 3:45.00, 3:00.00, 2:30.00 |
+| 1500m (retired, no longer offered) | `1500m@1` | 1,500 characters | 400, 800, 1200, 1500 m | 5:00.00, 3:45.00, 3:00.00, 2:30.00 |
 
 - Every rule is the sprint's: one character per metre, 200 ms stumble, the same start and false start rule.
 - Text is the same lowercase word list at every distance, held to the same difficulty per metre.
@@ -127,3 +127,20 @@ and year. The details are my implementation.
 
 Open questions: should the week follow a different time zone than UTC, and
 should a distance need a minimum number of athletes before medals are given?
+
+## Changes approved 24 Nov 2026
+
+- **1500m retired.** It is no longer offered in Train, Compete or on the
+  boards. The ruleset stays defined so old results remain checkable.
+- **Podium of three.** Weekly medals for a distance and device are awarded
+  only if at least three different athletes finished it that week.
+- **Rematch.** After an online race the host can start another at the same
+  distance from the result screen; everyone still on it is pulled in.
+- **Name filter.** New athlete names are checked against a short blocklist
+  on the server and in the game.
+- **Random words.** Every race, Train or online, draws a fresh random seed,
+  so no two races share a word sequence.
+- **Starter's voice.** "On your marks", "Set" and "Go" are spoken by the
+  device's speech engine. The gun sound and flash remain the start signal.
+- **Sound switch.** M on the title screen (or a tap on the label) turns all
+  sound off or on; remembered per device.

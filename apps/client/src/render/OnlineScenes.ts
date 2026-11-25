@@ -25,16 +25,11 @@ import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, 
 import { COLORS, GAME_W } from './layout';
 import { addDeviceIcon, addFlag, deviceKey, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
+import { markRaceRun, raceAlreadyRun } from './raceMemory';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
 
 export const ROOM_PIN_LENGTH = 5;
 const POLL_MS = 1000;
-
-/** Races this browser has already run, so returning to the room does not restart one. */
-const racesRun = new Set<string>();
-export function markRaceRun(raceId: string): void {
-  racesRun.add(raceId);
-}
 
 function message(e: unknown): string {
   return (e instanceof OnlineError ? e.message : 'Something went wrong. Try again.').toUpperCase();
@@ -425,10 +420,10 @@ export class LobbyScene extends Phaser.Scene {
 
     const race = answer.room.race;
     const gunAt = gunTimeFrom(answer);
-    if (answer.room.state === 'racing' && race && gunAt !== null && !racesRun.has(race.id)) {
+    if (answer.room.state === 'racing' && race && gunAt !== null && !raceAlreadyRun(race.id)) {
       markRaceRun(race.id);
       this.scene.start('race', {
-        online: { pin: this.pin, token: this.token(), you: this.you, race, gunAt, members: answer.room.members },
+        online: { pin: this.pin, token: this.token(), you: this.you, hostId: answer.room.hostId, race, gunAt, members: answer.room.members },
       });
       return;
     }
@@ -686,7 +681,7 @@ export class RecordsScene extends Phaser.Scene {
       this.add.text(
         586,
         338,
-        `Week of ${weekLabel(week.weekStart)}, Monday to Sunday (UTC).\nYour best online time each week counts.\nTop three at each distance take gold,\nsilver and bronze when the week ends.\nKeyboard and phone have their own medals.`,
+        `Week of ${weekLabel(week.weekStart)}, Monday to Sunday (UTC).\nYour best online time each week counts.\nTop three take gold, silver and bronze,\nif at least three athletes raced it.\nKeyboard and phone have their own medals.`,
         mono(13, COLORS.ice, { lineSpacing: 6 }),
       ),
     );

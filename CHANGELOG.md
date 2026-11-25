@@ -5,6 +5,23 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed (24 Nov requests)
+
+- Retired the 1500m: removed from `EVENT_IDS`; ruleset kept for old results.
+- Weekly medals need at least three athletes at the distance and device
+  (migration 0006).
+- New names are checked by `nameAllowed` (content package) on server and client.
+
+### Added (24 Nov requests)
+
+- Rematch from the online result screen (host: ENTER); others are pulled in.
+- Spoken start calls via the Web Speech API; `Sfx.say` and `Sfx.hush`.
+- Sound switch on the title screen (M or tap), stored in `typlympics.muted`.
+
+### Fixed
+
+- Start banners were clipped at the edges; the text now has padding.
+
 ### Added (confetti)
 
 - Confetti on the result screen for a win over a rival, a new personal

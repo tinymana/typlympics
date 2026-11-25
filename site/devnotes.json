@@ -2,6 +2,41 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.14",
+      "date": "2026-11-24",
+      "title": "Rematch, a starter's voice and a shorter programme",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Rematch: after an online race the host presses ENTER to run it back, and everyone on the result screen goes straight into the next race."
+        },
+        {
+          "tag": "new",
+          "text": "A starter now calls \"On your marks\", \"Set\" and \"Go\"."
+        },
+        {
+          "tag": "new",
+          "text": "Sound switch on the title screen: press M or tap the label."
+        },
+        {
+          "tag": "improved",
+          "text": "The 1500m is gone. It was a slog. The programme is now 100m, 200m, 400m and 800m."
+        },
+        {
+          "tag": "improved",
+          "text": "A podium needs three: weekly medals are only awarded at a distance if at least three athletes raced it that week."
+        },
+        {
+          "tag": "improved",
+          "text": "New athlete names go through a name filter."
+        },
+        {
+          "tag": "fixed",
+          "text": "The ON YOUR MARKS, SET and GO banners no longer have their edges cut off."
+        }
+      ]
+    },
+    {
       "version": "0.13.1",
       "date": "2026-11-24",
       "title": "Confetti",

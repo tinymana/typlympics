@@ -2,6 +2,29 @@
  * All sound is synthesised with Web Audio, so there are no audio files and
  * nothing borrowed. Placeholder quality, original by construction.
  */
+const MUTE_KEY = 'typlympics.muted';
+let muted = false;
+try {
+  muted = window.localStorage.getItem(MUTE_KEY) === '1';
+} catch {
+  // Storage can be unavailable (private mode); sound just starts on.
+}
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+/** Turns all game sound, the start voice included, on or off. Remembered on this device. */
+export function setMuted(value: boolean): void {
+  muted = value;
+  try {
+    window.localStorage.setItem(MUTE_KEY, value ? '1' : '0');
+    if (value) window.speechSynthesis?.cancel();
+  } catch {
+    // Not remembered, but still applied for this visit.
+  }
+}
+
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -36,7 +59,7 @@ export class Sfx {
     delay = 0,
     slideTo?: number,
   ): void {
-    if (!this.ctx || !this.master) return;
+    if (muted || !this.ctx || !this.master) return;
     const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -51,7 +74,7 @@ export class Sfx {
   }
 
   private noise(dur: number, gain: number, cutoff: number, delay = 0): void {
-    if (!this.ctx || !this.master) return;
+    if (muted || !this.ctx || !this.master) return;
     const t0 = this.ctx.currentTime + delay;
     const frames = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
     const buffer = this.ctx.createBuffer(1, frames, this.ctx.sampleRate);
@@ -67,6 +90,37 @@ export class Sfx {
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     src.connect(filter).connect(g).connect(this.master);
     src.start(t0);
+  }
+
+  /**
+   * The starter's voice, spoken by the device's own speech engine. It is a
+   * flourish only: the gun sound and the flash are the real start signal,
+   * because speech can begin a moment late on some devices.
+   */
+  say(text: string): void {
+    if (muted) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return;
+      synth.cancel();
+      const line = new SpeechSynthesisUtterance(text);
+      line.lang = 'en-US';
+      line.rate = 1.1;
+      line.pitch = 0.8;
+      line.volume = 1;
+      synth.speak(line);
+    } catch {
+      // No voice on this device; the tones still play.
+    }
+  }
+
+  /** Stops the starter mid-word, for a false start or leaving the race. */
+  hush(): void {
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      // Nothing to stop.
+    }
   }
 
   /** Footfall for each correct key, alternating left and right. */

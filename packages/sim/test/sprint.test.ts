@@ -235,9 +235,9 @@ describe('helpers', () => {
 
 describe('the five track events', () => {
   it('have one ruleset each, one character per metre, on the sprint\'s rules', () => {
-    expect(EVENT_IDS).toEqual(['100m', '200m', '400m', '800m', '1500m']);
+    expect(EVENT_IDS).toEqual(['100m', '200m', '400m', '800m']);
     const distances = EVENT_IDS.map((e) => RULESETS[e].distance);
-    expect(distances).toEqual([100, 200, 400, 800, 1500]);
+    expect(distances).toEqual([100, 200, 400, 800]);
     for (const e of EVENT_IDS) {
       const rs = RULESETS[e];
       expect(rs.id).toBe(`${e}@1`);

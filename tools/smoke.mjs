@@ -106,6 +106,11 @@ try {
   check('the right PIN signs back in', true);
   await sleep(400);
   await page.screenshot({ path: join(outDir, '1-title.png') });
+  await page.keyboard.press('m');
+  const mutedNow = await page.evaluate(() => ({ stored: window.localStorage.getItem('typlympics.muted'), label: window.__typlympics.scene.getScene('title').soundText.text }));
+  check('M on the title screen turns sound off and remembers it', mutedNow.stored === '1' && mutedNow.label === 'M: SOUND OFF', JSON.stringify(mutedNow));
+  await page.keyboard.press('m');
+  check('M again turns sound back on', await page.evaluate(() => window.localStorage.getItem('typlympics.muted') === '0'));
 
   const race = () => page.evaluate(() => {
     const s = window.__typlympics.scene.getScene('race');
@@ -390,7 +395,15 @@ try {
   check('times come from the server, computed from the keystroke logs', serverTimes.every((t) => t > 0) && serverTimes.includes(localOfficial), serverTimes.join(', '));
   check('the guest saw the host move during the race', await guestPage.evaluate(() => window.__typlympics.scene.getScene('race').opponents[0].pos === 100));
 
+  // Rematch: the host runs it back from the result screen and the guest is pulled in.
   await hostPage.keyboard.press('Enter');
+  await Promise.all([racePhase(hostPage, 'race'), racePhase(guestPage, 'race')]);
+  const [againA, againB] = await Promise.all([hostPage, guestPage].map((p) => p.evaluate(() => window.__typlympics.scene.getScene('race').line.text)));
+  check('a rematch starts a new race for both athletes without visiting the room', mock.state.races.size === 2 && againA === againB);
+  check('the rematch has different words from the first race', againA !== textA);
+  await hostPage.screenshot({ path: join(outDir, '24b-rematch.png') });
+  await hostPage.keyboard.press('Escape');
+  await guestPage.keyboard.press('Escape');
   await sceneOn(hostPage, 'lobby');
   await sleep(1300);
   check('after the race the host is back in the room, not thrown into the old race', await hostPage.evaluate(() => window.__typlympics.scene.isActive('lobby')));

@@ -27,7 +27,8 @@ import {
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { mobile, type Device } from '../input/mobile';
-import { online as onlineApi, ordinal, worldRecord, type OfficialResult, type Records, type RoomMember, type Standing } from '../net/online';
+import { gunTimeFrom, online as onlineApi, ordinal, worldRecord, type OfficialResult, type Records, type RoomAnswer, type RoomMember, type Standing } from '../net/online';
+import { markRaceRun } from './raceMemory';
 import {
   activeProfile,
   addToHistory,
@@ -71,6 +72,8 @@ export interface OnlineRace {
   token: string;
   /** This player's online athlete id. */
   you: string;
+  /** The athlete who can start races in this room. */
+  hostId: string;
   race: { id: string; event: string; seed: string };
   /** Local clock time (performance.now) of the gun. */
   gunAt: number;
@@ -194,6 +197,7 @@ export class RaceScene extends Phaser.Scene {
   private standingsDone = false;
   private confetti: Phaser.GameObjects.Rectangle[] = [];
   private confettiThrown = false;
+  private rematching = false;
   private standingObjects: Phaser.GameObjects.GameObject[] = [];
   /** What the race just finished was typed on. */
   private device: Device = 'keyboard';
@@ -273,6 +277,7 @@ export class RaceScene extends Phaser.Scene {
     this.opponents = [];
     this.official = null;
     this.standingsDone = false;
+    this.rematching = false;
     this.tickBusy = false;
     this.allTime = null;
     if (this.online) {
@@ -453,6 +458,8 @@ export class RaceScene extends Phaser.Scene {
         color: COLORS.white,
         stroke: COLORS.ink,
         strokeThickness: 10,
+        // Room for the italic slant and the outline, which were being clipped.
+        padding: { x: 28, y: 14 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -543,6 +550,7 @@ export class RaceScene extends Phaser.Scene {
     this.promptText.setText('ENTER or TAB: RACE AGAIN');
     this.showBanner('ON YOUR MARKS', COLORS.white);
     this.sfx.marks();
+    this.sfx.say('On your marks');
   }
 
   private resetRunner(r: Runner): void {
@@ -570,6 +578,7 @@ export class RaceScene extends Phaser.Scene {
       this.showBanner('FALSE START', COLORS.red);
     } else {
       this.showBanner('GO!', COLORS.gold, 500);
+      this.sfx.say('Go!');
     }
   }
 
@@ -587,6 +596,7 @@ export class RaceScene extends Phaser.Scene {
     this.sfx.unlock();
     if (this.phase === 'marks' || this.phase === 'set') {
       if (this.preGun.length === 0) {
+        this.sfx.hush();
         this.sfx.falseStart();
         this.showBanner('FALSE START', COLORS.red);
       }
@@ -632,7 +642,10 @@ export class RaceScene extends Phaser.Scene {
       if (this.phase !== 'result' && key === 'Escape') {
         void onlineApi.submit(this.online.token, this.online.race.id, packLog(this.log), mobile.raceDevice()).catch(() => undefined);
         this.scene.start('lobby', { pin: this.online.pin });
+      } else if (this.phase === 'result' && key !== 'Escape' && this.canRematch()) {
+        void this.rematch(this.online);
       } else if (this.phase === 'result' && (key === 'Enter' || key === 'Tab' || key === 'Escape')) {
+        this.sfx.hush();
         this.scene.start('lobby', { pin: this.online.pin });
       }
       return;
@@ -791,6 +804,7 @@ export class RaceScene extends Phaser.Scene {
     p.headline.setText('SENDING YOUR RACE TO THE SERVER . . .').setColor(COLORS.ice);
     p.medal.setText('').setColor(COLORS.ice);
     this.promptText.setText('ENTER: BACK TO THE ROOM');
+    this.time.addEvent({ delay: 1000, loop: true, callback: () => void this.watchForRematch(race) });
     try {
       this.official = await onlineApi.submit(race.token, race.race.id, packLog(this.log), this.device);
     } catch (e) {
@@ -808,12 +822,59 @@ export class RaceScene extends Phaser.Scene {
         if (!this.scene.isActive()) return;
         this.showStandings(race, res.entries, res.done);
         if (res.done || polls >= RESULT_POLLS_MAX) this.standingsDone = true;
+        this.showResultPrompt(race);
       } catch {
         // A missed poll is harmless; the next one catches up.
       }
     };
     await poll();
     this.time.addEvent({ delay: RESULT_POLL_MS, repeat: RESULT_POLLS_MAX, callback: () => void poll() });
+  }
+
+  /** The host can run it back as soon as everyone's result is in. */
+  private canRematch(): boolean {
+    return !!this.online && this.online.hostId === this.online.you && this.standingsDone && !this.rematching;
+  }
+
+  /** Host only: starts another race at the same distance without going back to the room. */
+  private async rematch(race: OnlineRace): Promise<void> {
+    this.rematching = true;
+    this.promptText.setText('STARTING THE REMATCH . . .');
+    try {
+      this.enterRace(race, await onlineApi.start(race.token, race.pin, race.race.event));
+    } catch {
+      // The room may have moved on; it is the safe place to sort that out.
+      if (this.scene.isActive()) this.scene.start('lobby', { pin: race.pin });
+    }
+  }
+
+  /** Everyone on the result screen watches the room, so a rematch pulls them straight in. */
+  private async watchForRematch(race: OnlineRace): Promise<void> {
+    if (!this.scene.isActive() || this.phase !== 'result' || this.rematching) return;
+    try {
+      this.enterRace(race, await onlineApi.room(race.token, race.pin, mobile.likelyDevice()));
+    } catch {
+      // A missed check is harmless; the next one catches up.
+    }
+  }
+
+  /** Jumps into the room's race if it has started a new one. */
+  private enterRace(race: OnlineRace, answer: RoomAnswer): void {
+    const next = answer.room.race;
+    const gunAt = gunTimeFrom(answer);
+    if (!this.scene.isActive() || answer.room.state !== 'racing' || !next || gunAt === null || next.id === race.race.id) {
+      this.rematching = false;
+      return;
+    }
+    markRaceRun(next.id);
+    this.scene.restart({ online: { pin: race.pin, token: race.token, you: answer.you, hostId: answer.room.hostId, race: next, gunAt, members: answer.room.members } });
+  }
+
+  /** What the result screen offers once the standings are final. */
+  private showResultPrompt(race: OnlineRace): void {
+    if (this.rematching) return;
+    if (race.hostId === race.you) this.promptText.setText(this.standingsDone ? 'ENTER: REMATCH     ESC: ROOM' : 'ENTER: BACK TO THE ROOM');
+    else this.promptText.setText(this.standingsDone ? 'WAITING FOR A REMATCH     ENTER: ROOM' : 'ENTER: BACK TO THE ROOM');
   }
 
   /** Paper confetti falling over the result. Thrown once per race. */
@@ -1034,6 +1095,7 @@ export class RaceScene extends Phaser.Scene {
       this.gunDueAt = this.online ? this.online.gunAt : now + GUN_DELAY_MIN_MS + Math.random() * (GUN_DELAY_MAX_MS - GUN_DELAY_MIN_MS);
       if (this.preGun.length === 0) this.showBanner('SET', COLORS.orange);
       this.sfx.set();
+      if (this.preGun.length === 0) this.sfx.say('Set');
     } else if (this.phase === 'set' && now >= this.gunDueAt) {
       this.fireGun(now);
       this.refreshText();
