@@ -5,6 +5,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (confetti)
+
+- Confetti on the result screen for a win over a rival, a new personal
+  best, first place in an online race or a world record.
+
 ### Added (world record to beat)
 
 - Online races show the all-time best for the distance and device beside

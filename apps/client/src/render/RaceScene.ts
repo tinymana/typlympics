@@ -192,6 +192,8 @@ export class RaceScene extends Phaser.Scene {
   private tickBusy = false;
   private official: OfficialResult | null = null;
   private standingsDone = false;
+  private confetti: Phaser.GameObjects.Rectangle[] = [];
+  private confettiThrown = false;
   private standingObjects: Phaser.GameObjects.GameObject[] = [];
   /** What the race just finished was typed on. */
   private device: Device = 'keyboard';
@@ -536,6 +538,7 @@ export class RaceScene extends Phaser.Scene {
     this.metresText.setText('0 m');
     this.wpmText.setText('');
     this.showBests();
+    this.clearConfetti();
     this.panel.setVisible(false);
     this.promptText.setText('ENTER or TAB: RACE AGAIN');
     this.showBanner('ON YOUR MARKS', COLORS.white);
@@ -710,6 +713,8 @@ export class RaceScene extends Phaser.Scene {
     } else {
       this.banner.setVisible(false);
     }
+    // Confetti for a win over a rival, a clean sweep or a new personal best.
+    if (!this.online && (isRecord || sweep || this.wonAgainstRival)) this.throwConfetti();
     if (isRecord || sweep || this.wonAgainstRival) this.sfx.record();
     else this.sfx.finish();
     this.fillPanel(official, previous, isRecord);
@@ -811,6 +816,40 @@ export class RaceScene extends Phaser.Scene {
     this.time.addEvent({ delay: RESULT_POLL_MS, repeat: RESULT_POLLS_MAX, callback: () => void poll() });
   }
 
+  /** Paper confetti falling over the result. Thrown once per race. */
+  private throwConfetti(): void {
+    if (this.confettiThrown) return;
+    this.confettiThrown = true;
+    const colors = [0xffd23f, 0xff5fa2, 0x4ad9d9, 0x7cf07c, 0xf4f4ff, 0xa06bff];
+    for (let i = 0; i < 110; i++) {
+      const piece = this.add
+        .rectangle(Math.random() * GAME_W, -20 - Math.random() * 220, 4 + Math.random() * 5, 6 + Math.random() * 6, colors[i % colors.length])
+        .setScrollFactor(0)
+        .setDepth(110)
+        .setAngle(Math.random() * 360);
+      this.confetti.push(piece);
+      this.tweens.add({
+        targets: piece,
+        y: GAME_H + 30,
+        x: piece.x + (Math.random() - 0.5) * 220,
+        angle: piece.angle + (Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 540),
+        duration: 1900 + Math.random() * 1900,
+        delay: Math.random() * 900,
+        ease: 'Sine.easeIn',
+        onComplete: () => piece.destroy(),
+      });
+    }
+  }
+
+  private clearConfetti(): void {
+    for (const piece of this.confetti) {
+      this.tweens.killTweensOf(piece);
+      piece.destroy();
+    }
+    this.confetti = [];
+    this.confettiThrown = false;
+  }
+
   /** Top right of the screen: the world record to beat (online) and your own best. */
   private showBests(): void {
     const pb = this.pbTimeMs !== null ? `PB ${formatTime(this.pbTimeMs)}` : 'PB --.--';
@@ -835,6 +874,8 @@ export class RaceScene extends Phaser.Scene {
       // A world record needs the fastest time on that device in this race too.
       const fastestOnDevice = !entries.some((e) => e.id !== race.you && e.device === me.device && e.timeMs != null && me.timeMs != null && e.timeMs < me.timeMs);
       const record = official?.status === 'finished' && fastestOnDevice && this.brokeWorldRecord(official.timeMs);
+      // Confetti for winning a race against others, or for a world record.
+      if ((me.place === 1 && entries.length >= 2) || record) this.throwConfetti();
       const extra = record ? '   NEW WORLD RECORD!' : official?.personalBest ? '   ONLINE BEST!' : '';
       p.headline.setText(`${ordinal(me.place)} PLACE${done ? '' : ' SO FAR'}${extra}`).setColor(me.place === 1 || record ? COLORS.gold : COLORS.ice);
     } else {
