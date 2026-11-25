@@ -5,6 +5,37 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (phones)
+
+- Touch devices: a hidden text field raises the phone keyboard, and what
+  is typed is fed to the game character by character (`input/mobile.ts`).
+  Autocorrect, autocapitalise and spellcheck are switched off on the
+  field, and it is cleared after each word.
+- On-screen menu buttons (arrows, Enter, Esc, Type). The game is refitted
+  to the space the phone keyboard leaves, with the race text shown large
+  in a panel under it. A Train race waits on its marks until the keyboard
+  is open.
+- Device tagging: each race is recorded as `keyboard` or `phone`. It is
+  `phone` when characters arrived through the text field while an
+  on-screen keyboard was taking up part of the screen. Stored in local
+  history and sent with online results.
+- Server: `device` on race entries and bests (migration 0003); one best
+  per athlete, distance and device; `records` returns `phoneBoards` and
+  `phoneTopSpeed` beside the keyboard boards. World Records switches
+  between the two with up and down.
+
+### Fixed
+
+- Race room: the host's start press was ignored if a room poll happened
+  to be in flight. Polling and starting now use separate flags.
+
+### Known limits (phones)
+
+- The device is reported by the client and can be spoofed, like any
+  client-reported value.
+- Tested in an emulated phone only. Real phone keyboards vary, especially
+  predictive text on Android.
+
 ### Changed
 
 - The rival portrait is no longer shown on the result panel (win or loss).

@@ -2,6 +2,37 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.9",
+      "date": "2026-11-24",
+      "title": "Play on your phone",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Phones and tablets can now play with their on-screen keyboard. Tap TYPE to open it; the text to type appears in large letters just above the keyboard."
+        },
+        {
+          "tag": "new",
+          "text": "On-screen buttons for the menus: arrows, Enter and Esc."
+        },
+        {
+          "tag": "new",
+          "text": "Every result is marked as typed on a keyboard or a phone. World Records keeps separate boards for each; up and down arrows switch between them."
+        },
+        {
+          "tag": "new",
+          "text": "Phone and keyboard players can still race each other in the same room."
+        },
+        {
+          "tag": "fixed",
+          "text": "In the race room, the host's start press could occasionally be missed. It now always registers."
+        },
+        {
+          "tag": "improved",
+          "text": "Hold your phone upright for the best view: sideways leaves very little room above the keyboard."
+        }
+      ]
+    },
+    {
       "version": "0.8.1",
       "date": "2026-11-24",
       "title": "Cleaner result screen",

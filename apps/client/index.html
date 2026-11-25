@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" href="data:," />
     <title>TYPLYMPICS - 100m Sprint</title>
     <style>
@@ -20,6 +20,126 @@
       canvas {
         image-rendering: pixelated;
         outline: none;
+      }
+
+      /* Touch devices: the game sits in the part of the screen the phone
+         keyboard leaves free, with menu buttons or the race text under it. */
+      body.touch {
+        position: fixed;
+        inset: 0;
+        touch-action: manipulation;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body.touch #game {
+        position: fixed;
+        left: 0;
+        top: var(--game-top, 0px);
+        width: 100vw;
+        height: var(--game-h, 100vh);
+      }
+      /* Keep the game at the top of its area, next to the text and keyboard below. */
+      body.touch canvas {
+        margin-top: 0 !important;
+      }
+      #soft-input {
+        position: fixed;
+        left: 0;
+        top: var(--game-top, 0px);
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        border: 0;
+        opacity: 0;
+        font-size: 16px; /* smaller text makes iOS zoom the page on focus */
+        background: transparent;
+        color: transparent;
+        caret-color: transparent;
+      }
+      #touch-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(var(--visible-bottom, 0px) + env(safe-area-inset-bottom, 0px));
+        height: 64px;
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        box-sizing: border-box;
+        background: #120824;
+        border-top: 2px solid #ffd23f;
+      }
+      body.kb-open #touch-bar {
+        display: none;
+      }
+      .touch-key {
+        flex: 1 1 0;
+        min-width: 0;
+        border: 2px solid #5b3aa6;
+        border-radius: 8px;
+        background: #2a1458;
+        color: #ffffff;
+        font: bold 15px 'Courier New', Courier, monospace;
+        touch-action: manipulation;
+      }
+      .touch-key.wide {
+        flex: 1.7 1 0;
+      }
+      .touch-key.accent {
+        background: linear-gradient(180deg, #ffe680, #ff9a3c);
+        border-color: #120824;
+        color: #2a1a02;
+      }
+      .touch-key:active {
+        background: #ffd23f;
+        color: #120824;
+      }
+      #touch-esc {
+        position: fixed;
+        right: 6px;
+        top: calc(var(--game-top, 0px) + 6px);
+        display: none;
+        flex: none;
+        width: 52px;
+        height: 34px;
+        font-size: 12px;
+        opacity: 0.85;
+        z-index: 3;
+      }
+      body.kb-open #touch-esc {
+        display: block;
+      }
+      #race-text {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: var(--panel-top, 0px);
+        height: 118px;
+        display: none;
+        box-sizing: border-box;
+        padding: 8px 12px;
+        overflow: hidden;
+        background: #120824;
+        border-top: 2px solid #ffd23f;
+        font: bold 22px/1.25 'Courier New', Courier, monospace;
+        color: #ffffff;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+      body.race-text-on #race-text {
+        display: block;
+      }
+      #race-text .done {
+        color: #7d6aa8;
+      }
+      #race-text .next {
+        color: #120824;
+        background: #ffd23f;
+        border-radius: 3px;
+      }
+      #race-text .next.bad {
+        background: #ff5566;
       }
     </style>
   </head>

@@ -297,6 +297,8 @@ async function submit(body: Body): Promise<Row> {
   if (race.status !== 'racing') throw new ApiError('already_submitted', 'A result is already recorded for this race.', 409);
 
   const ruleset = RULESETS[race.event as EventId];
+  // Reported by the client: a phone's on-screen keyboard, or a physical keyboard.
+  const device = body['device'] === 'phone' ? 'phone' : 'keyboard';
   const log = parseLog(body['log'], ruleset.distance);
   const text = generateSprintLine(race.seed as string, ruleset.distance).text;
   let result;
@@ -317,15 +319,16 @@ async function submit(body: Body): Promise<Row> {
     update typlympics.race_entries
     set status = ${status}, time_ms = ${result.timeMs}, wpm = ${result.wpm === null ? null : Math.round(result.wpm * 100) / 100},
         accuracy = ${Math.round(result.accuracy * 100000) / 100000}, reaction_ms = ${result.reactionMs},
-        errors = ${result.errors}, false_start = ${result.falseStart}, log = ${sql.json(body['log'] as any)}, submitted_at = now()
+        errors = ${result.errors}, false_start = ${result.falseStart}, log = ${sql.json(body['log'] as any)}, submitted_at = now(),
+        device = ${device}
     where race_id = ${raceId} and athlete_id = ${me.id} and status = 'racing'`;
 
   let personalBest = false;
   if (status === 'finished' && result.timeMs !== null && result.wpm !== null) {
     const best: Row[] = await sql`
-      insert into typlympics.bests (athlete_id, ruleset_id, time_ms, wpm, race_id)
-      values (${me.id}, ${ruleset.id}, ${result.timeMs}, ${Math.round(result.wpm * 100) / 100}, ${raceId})
-      on conflict (athlete_id, ruleset_id) do update
+      insert into typlympics.bests (athlete_id, ruleset_id, device, time_ms, wpm, race_id)
+      values (${me.id}, ${ruleset.id}, ${device}, ${result.timeMs}, ${Math.round(result.wpm * 100) / 100}, ${raceId})
+      on conflict (athlete_id, ruleset_id, device) do update
         set time_ms = excluded.time_ms, wpm = excluded.wpm, race_id = excluded.race_id, achieved_at = now()
         where typlympics.bests.time_ms > excluded.time_ms
       returning 1`;
@@ -338,6 +341,7 @@ async function submit(body: Body): Promise<Row> {
   return {
     result: {
       status,
+      device,
       timeMs: result.timeMs,
       wpm: result.wpm,
       accuracy: result.accuracy,
@@ -372,7 +376,7 @@ async function results(body: Body): Promise<Row> {
   const pins: Row[] = await sql`select pin from typlympics.races where id = ${raceId}`;
   if (pins[0]) await expireRace(pins[0].pin as string);
   const entries: Row[] = await sql`
-    select a.id, a.name, a.nationality, e.lane, e.status, e.time_ms, e.wpm, e.accuracy, e.reaction_ms, e.false_start
+    select a.id, a.name, a.nationality, e.lane, e.status, e.device, e.time_ms, e.wpm, e.accuracy, e.reaction_ms, e.false_start
     from typlympics.race_entries e join typlympics.athletes a on a.id = e.athlete_id
     where e.race_id = ${raceId}
     order by (e.status = 'finished') desc, e.time_ms asc nulls last, e.lane`;
@@ -385,6 +389,7 @@ async function results(body: Body): Promise<Row> {
       nationality: e.nationality,
       lane: e.lane,
       status: e.status,
+      device: e.device,
       place: e.status === 'finished' ? ++place : null,
       timeMs: e.time_ms,
       wpm: e.wpm === null ? null : Number(e.wpm),
@@ -395,18 +400,24 @@ async function results(body: Body): Promise<Row> {
   };
 }
 
-/** The all-time boards. Public: no sign-in needed to look. */
+/**
+ * The all-time boards. Public: no sign-in needed to look.
+ * Keyboard and phone results are ranked separately: `boards` holds the
+ * keyboard boards and `phoneBoards` the phone ones.
+ */
 async function records(): Promise<Row> {
   const times: Row[] = await sql`
     select * from (
-      select b.ruleset_id, a.name, a.nationality, b.time_ms, b.wpm, b.achieved_at,
-             row_number() over (partition by b.ruleset_id order by b.time_ms, b.achieved_at) as rank
+      select b.ruleset_id, b.device, a.name, a.nationality, b.time_ms, b.wpm, b.achieved_at,
+             row_number() over (partition by b.ruleset_id, b.device order by b.time_ms, b.achieved_at) as rank
       from typlympics.bests b join typlympics.athletes a on a.id = b.athlete_id
-    ) ranked where rank <= 10 order by ruleset_id, rank`;
+    ) ranked where rank <= 10 order by ruleset_id, device, rank`;
   const speed: Row[] = await sql`
-    select a.name, a.nationality, b.wpm, b.ruleset_id
-    from typlympics.bests b join typlympics.athletes a on a.id = b.athlete_id
-    order by b.wpm desc, b.achieved_at limit 10`;
+    select * from (
+      select a.name, a.nationality, b.wpm, b.ruleset_id, b.device,
+             row_number() over (partition by b.device order by b.wpm desc, b.achieved_at) as rank
+      from typlympics.bests b join typlympics.athletes a on a.id = b.athlete_id
+    ) ranked where rank <= 10 order by device, rank`;
   const wins: Row[] = await sql`
     with ranked as (
       select athlete_id, rank() over (partition by race_id order by time_ms) as place, count(*) over (partition by race_id) as field
@@ -417,12 +428,17 @@ async function records(): Promise<Row> {
     where r.place = 1 and r.field >= 2
     group by a.id order by wins desc, a.name limit 10`;
   const boards: Record<string, Row[]> = {};
+  const phoneBoards: Record<string, Row[]> = {};
   for (const t of times) {
-    (boards[t.ruleset_id] ??= []).push({ rank: Number(t.rank), name: t.name, nationality: t.nationality, timeMs: t.time_ms, wpm: Number(t.wpm), at: t.achieved_at });
+    const target = t.device === 'phone' ? phoneBoards : boards;
+    (target[t.ruleset_id] ??= []).push({ rank: Number(t.rank), name: t.name, nationality: t.nationality, timeMs: t.time_ms, wpm: Number(t.wpm), at: t.achieved_at });
   }
+  const speedRow = (s: Row): Row => ({ name: s.name, nationality: s.nationality, wpm: Number(s.wpm), rulesetId: s.ruleset_id });
   return {
     boards,
-    topSpeed: speed.map((s) => ({ name: s.name, nationality: s.nationality, wpm: Number(s.wpm), rulesetId: s.ruleset_id })),
+    phoneBoards,
+    topSpeed: speed.filter((s) => s.device !== 'phone').map(speedRow),
+    phoneTopSpeed: speed.filter((s) => s.device === 'phone').map(speedRow),
     mostWins: wins,
   };
 }

@@ -26,6 +26,7 @@ import {
 } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
+import { mobile, type Device } from '../input/mobile';
 import { online as onlineApi, ordinal, type OfficialResult, type RoomMember, type Standing } from '../net/online';
 import {
   activeProfile,
@@ -188,6 +189,8 @@ export class RaceScene extends Phaser.Scene {
   private tickBusy = false;
   private official: OfficialResult | null = null;
   private standingsDone = false;
+  /** What the race just finished was typed on. */
+  private device: Device = 'keyboard';
   private finishedAt = 0;
   private streak = 0;
   private dust: Phaser.GameObjects.Rectangle[] = [];
@@ -294,6 +297,7 @@ export class RaceScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.detach?.();
       this.detach = null;
+      mobile.hideRaceText();
     });
 
     this.beginRace();
@@ -484,6 +488,7 @@ export class RaceScene extends Phaser.Scene {
     this.streak = 0;
     this.phase = 'marks';
     this.phaseAt = performance.now();
+    mobile.raceBegin();
 
     // The other lane: a rival typing this line under the same rules, or your own best.
     this.wonAgainstRival = false;
@@ -604,7 +609,7 @@ export class RaceScene extends Phaser.Scene {
       // Online there is no restart: Esc abandons the race, and after the
       // finish every key leads back to the room.
       if (this.phase !== 'result' && key === 'Escape') {
-        void onlineApi.submit(this.online.token, this.online.race.id, packLog(this.log)).catch(() => undefined);
+        void onlineApi.submit(this.online.token, this.online.race.id, packLog(this.log), mobile.raceDevice()).catch(() => undefined);
         this.scene.start('lobby', { pin: this.online.pin });
       } else if (this.phase === 'result' && (key === 'Enter' || key === 'Tab' || key === 'Escape')) {
         this.scene.start('lobby', { pin: this.online.pin });
@@ -627,6 +632,8 @@ export class RaceScene extends Phaser.Scene {
   private finishRace(): void {
     this.phase = 'result';
     this.finishedAt = performance.now();
+    this.device = mobile.raceDevice();
+    mobile.hideRaceText();
     // The official result is recomputed from the log, exactly as a ranked
     // server will do. The live state is only ever a preview of it.
     const official = simulate(this.ruleset, this.line.text, this.log);
@@ -644,6 +651,7 @@ export class RaceScene extends Phaser.Scene {
       reactionMs: official.reactionMs,
       errors: official.errors,
       falseStart: official.falseStart,
+      device: this.device,
       at: new Date().toISOString(),
     });
     if (isRecord) {
@@ -743,7 +751,7 @@ export class RaceScene extends Phaser.Scene {
         })
         .join('   '),
     );
-    p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  esc: menu`);
+    p.seed.setText(`ruleset ${res.rulesetId}  seed ${this.line.seed}  ${this.device}  esc: menu`);
   }
 
   // ------------------------------------------------------------ online
@@ -758,7 +766,7 @@ export class RaceScene extends Phaser.Scene {
     p.medal.setText('').setColor(COLORS.ice);
     this.promptText.setText('ENTER: BACK TO THE ROOM');
     try {
-      this.official = await onlineApi.submit(race.token, race.race.id, packLog(this.log));
+      this.official = await onlineApi.submit(race.token, race.race.id, packLog(this.log), this.device);
     } catch (e) {
       if (!this.scene.isActive()) return;
       p.headline.setText('RESULT NOT RECORDED').setColor(COLORS.red);
@@ -858,6 +866,8 @@ export class RaceScene extends Phaser.Scene {
   private refreshText(): void {
     const pos = this.sim.pos;
     const text = this.line.text;
+    // On a phone the same text is also shown large, above the phone keyboard.
+    if (mobile.enabled && this.phase !== 'result') mobile.setRaceText(text, pos, this.nextRed);
     const top = topLineFor(this.lines, pos);
     const scrolled = top !== this.topLine;
     this.topLine = top;
@@ -911,6 +921,14 @@ export class RaceScene extends Phaser.Scene {
   override update(_time: number, deltaMs: number): void {
     const now = performance.now();
     const dt = Math.min(0.05, deltaMs / 1000);
+
+    // On a phone, a Train race waits on its marks until the keyboard is open.
+    if (mobile.enabled && !this.online && this.phase === 'marks' && !mobile.keyboardFocused()) {
+      this.phaseAt = now;
+      if (this.banner.text !== 'TAP TYPE TO START') this.showBanner('TAP TYPE TO START', COLORS.gold);
+    } else if (this.phase === 'marks' && this.banner.text === 'TAP TYPE TO START') {
+      this.showBanner('ON YOUR MARKS', COLORS.white);
+    }
 
     // Online the server sets the gun time; in Train it is a random wait after "set".
     const setDue = this.online ? now >= this.online.gunAt - MARKS_MS : now - this.phaseAt >= MARKS_MS;

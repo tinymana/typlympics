@@ -369,7 +369,7 @@ export class CareerScene extends Phaser.Scene {
       const date = Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       const isBest = r.timeMs === stats.bestTimeMs;
       const color = isBest ? COLORS.gold : COLORS.white;
-      this.add.text(506, y, date.toUpperCase(), mono(14, COLORS.ice));
+      this.add.text(506, y, `${date.toUpperCase()}${r.device === 'phone' ? '  PHONE' : ''}`, mono(14, COLORS.ice));
       this.add.text(700, y, formatTime(r.timeMs), mono(15, color)).setOrigin(1, 0);
       this.add.text(790, y, `${Math.round(r.wpm)}`, mono(15, color)).setOrigin(1, 0);
       this.add.text(914, y, `${(r.accuracy * 100).toFixed(1)}%`, mono(15, color)).setOrigin(1, 0);

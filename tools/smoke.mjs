@@ -405,6 +405,76 @@ try {
   const board = await hostPage.evaluate(() => window.__typlympics.scene.getScene('records').board.boards['100m@1']);
   check('World Records lists both athletes, fastest first', board.length === 2 && board[0].name === 'HOST ONE' && board[0].timeMs < board[1].timeMs);
 
+  // ---------------------------------------------------------- phone: on-screen keyboard
+  // A headless browser has no touch screen or phone keyboard, so the test
+  // switches the game's touch mode on and types into the hidden text field.
+  const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true, isMobile: true });
+  await phoneCtx.addInitScript(() => {
+    window.__typlympicsTouch = true;
+    window.__typlympicsSoftKeyboard = true;
+  });
+  const phone = await withMock(await phoneCtx.newPage());
+  phone.on('pageerror', (e) => errors.push(String(e)));
+  phone.on('console', (m) => {
+    if (m.type() === 'error' && !/status of 40[0-9]/.test(m.text())) errors.push(m.text());
+  });
+  await phone.goto(`http://localhost:${PORT}/`);
+  await sceneOn(phone, 'login');
+  await sleep(300);
+  check('touch devices get the menu buttons', await phone.locator('#touch-bar').isVisible());
+  const softFocused = () => phone.evaluate(() => document.activeElement?.id === 'soft-input');
+  const tapKey = (label) => phone.locator('#touch-bar .touch-key', { hasText: label }).first().tap();
+  await tapKey('TYPE');
+  check('the TYPE button opens the keyboard field', await softFocused());
+  await phone.keyboard.type('Thumbs', { delay: 20 }); // a phone would capitalise the first letter
+  await sleep(100);
+  check('text typed on the phone keyboard reaches the game', await phone.evaluate(() => window.__typlympics.scene.getScene('login').nameText === 'THUMBS'));
+  await phone.keyboard.press('Enter');
+  await phone.keyboard.press('Enter');
+  await phone.keyboard.type('3333', { delay: 20 });
+  await phone.keyboard.press('Enter');
+  await sceneOn(phone, 'title');
+  await sleep(200);
+
+  // Keyboard dismissed: menus are driven with the on-screen buttons.
+  await phone.evaluate(() => document.activeElement?.blur());
+  await sleep(150);
+  await phone.screenshot({ path: join(outDir, '30-phone-title.png') });
+  await tapKey('ENTER'); // Train
+  await sceneOn(phone, 'events');
+  await tapKey('ENTER'); // 100 M
+  await sceneOn(phone, 'rivals');
+  await tapKey('\u25B2'); // up from the first rival to the time trial
+  await sleep(100);
+  await tapKey('ENTER');
+  await sceneOn(phone, 'race');
+  await sleep(700);
+  const waiting = await phone.evaluate(() => {
+    const r = window.__typlympics.scene.getScene('race');
+    return { phase: r.phase, banner: r.banner.text };
+  });
+  check('a phone race waits on its marks until the keyboard is open', waiting.phase === 'marks' && waiting.banner === 'TAP TYPE TO START', JSON.stringify(waiting));
+  await phone.screenshot({ path: join(outDir, '31-phone-waiting.png') });
+  await phone.locator('#race-text').tap(); // tapping the text opens the keyboard too
+  check('tapping the race text opens the keyboard', await softFocused());
+  await racePhase(phone, 'race');
+  const phoneText = await phone.evaluate(() => window.__typlympics.scene.getScene('race').line.text);
+  await sleep(180);
+  await phone.keyboard.type(phoneText.slice(0, 40), { delay: 30 });
+  await phone.screenshot({ path: join(outDir, '32-phone-race.png') });
+  check('the race text is shown large under the game', await phone.locator('#race-text').isVisible() && (await phone.locator('#race-text .next').count()) === 1);
+  await phone.keyboard.type(phoneText.slice(40), { delay: 30 });
+  await racePhase(phone, 'result');
+  await sleep(600);
+  await phone.screenshot({ path: join(outDir, '33-phone-result.png') });
+  const phoneSave = await phone.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles.thumbs);
+  check('a race typed on the phone keyboard finishes cleanly', phoneSave.history.length === 1 && phoneSave.history[0].errors === 0, JSON.stringify(phoneSave.history[0]));
+  check('the race is recorded as typed on a phone', phoneSave.history[0].device === 'phone');
+  const pcSave = await page.evaluate(() => JSON.parse(localStorage.getItem('typlympics.save')).profiles['smoke-test']);
+  check('races typed on a physical keyboard are recorded as keyboard', pcSave.history.every((h) => h.device === 'keyboard'));
+  const mockDevices = [...mock.state.bests.values()].map((b) => b.device);
+  check('online results carry the device to the server', mockDevices.length === 2 && mockDevices.every((d) => d === 'keyboard'), mockDevices.join(','));
+
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   void startRematch;
 } catch (e) {

@@ -40,6 +40,8 @@ export interface RaceSummary {
   reactionMs: number | null;
   errors: number;
   falseStart: boolean;
+  /** What the race was typed on. Absent in older saves, which were all keyboard. */
+  device?: 'keyboard' | 'phone';
   at: string;
 }
 

@@ -104,4 +104,5 @@ the distance. The rest is my implementation and open to change.
 | Leaderboard | Best official time per athlete per distance |
 | Held for review | Finish more than 8 s before its log arrived, or over 300 WPM; not listed |
 | Did not finish | Leaving mid-race, or not finishing within the time limit |
+| Keyboard or phone | Each result is tagged; World Records ranks the two separately; both may race in one room (decided 2026-11-24) |
 | Online identity | Athlete name (unique), nationality and four-digit PIN; five wrong PINs lock the name for 15 minutes |

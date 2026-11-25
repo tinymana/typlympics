@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { EVENT_IDS, RULESETS, eventLabel, formatTime, type EventId } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
+import { mobile } from '../input/mobile';
 import { OnlineError, gunTimeFrom, online, type Records, type RoomAnswer, type RoomState } from '../net/online';
 import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, persistSave, type KeyValueStore, type Profile, type Save } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
@@ -258,7 +259,10 @@ export class LobbyScene extends Phaser.Scene {
   private room: RoomState | null = null;
   private you = '';
   private eventIndex = 0;
-  private busy = false;
+  /** A room poll is in flight. */
+  private polling = false;
+  /** The host has pressed start and the server has not answered yet. */
+  private starting = false;
   private leaving = false;
   private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image }> = [];
   private eventText!: Phaser.GameObjects.Text;
@@ -280,7 +284,8 @@ export class LobbyScene extends Phaser.Scene {
     ensureTextures(this);
     this.sfx = new Sfx(ctx.save.settings.volume);
     this.room = null;
-    this.busy = false;
+    this.polling = false;
+    this.starting = false;
     this.leaving = false;
     this.lanes = [];
 
@@ -323,10 +328,12 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private async poll(): Promise<void> {
-    if (this.busy || this.leaving) return;
-    this.busy = true;
+    if (this.polling || this.starting || this.leaving) return;
+    this.polling = true;
     try {
-      this.apply(await online.room(this.token(), this.pin));
+      const answer = await online.room(this.token(), this.pin);
+      // A start that happened while this poll was in flight is newer than it.
+      if (!this.starting) this.apply(answer);
     } catch (e) {
       if (e instanceof OnlineError && ['not_member', 'no_room', 'signed_out'].includes(e.code)) {
         if (this.scene.isActive()) this.scene.start('compete', { note: message(e) });
@@ -334,7 +341,7 @@ export class LobbyScene extends Phaser.Scene {
         this.note.setText(message(e));
       }
     } finally {
-      this.busy = false;
+      this.polling = false;
     }
   }
 
@@ -377,15 +384,15 @@ export class LobbyScene extends Phaser.Scene {
       this.eventIndex = (this.eventIndex + dir + EVENT_IDS.length) % EVENT_IDS.length;
       this.sfx.step();
       this.refresh();
-    } else if ((key === 'Enter' || key === 'Tab') && !this.busy) {
-      this.busy = true;
+    } else if ((key === 'Enter' || key === 'Tab') && !this.starting) {
+      this.starting = true;
       this.status.setText('STARTING . . .');
       try {
         const answer = await online.start(this.token(), this.pin, EVENT_IDS[this.eventIndex] as EventId);
-        this.busy = false;
+        this.starting = false;
         this.apply(answer);
       } catch (e) {
-        this.busy = false;
+        this.starting = false;
         this.note.setText(message(e));
         this.sfx.error();
       }
@@ -420,6 +427,8 @@ export class LobbyScene extends Phaser.Scene {
 export class RecordsScene extends Phaser.Scene {
   private eventIndex = 0;
   private board: Records | null = null;
+  /** Which board is showing. Keyboard and phone results are ranked apart. */
+  private phone = false;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private status!: Phaser.GameObjects.Text;
 
@@ -432,18 +441,22 @@ export class RecordsScene extends Phaser.Scene {
     ensureTextures(this);
     this.objects = [];
     this.board = null;
+    this.phone = mobile.enabled;
     addBackdrop(this);
-    addHeading(this, 'WORLD RECORDS', 'ALL-TIME BESTS FROM ONLINE RACES');
+    addHeading(this, 'WORLD RECORDS', 'ALL-TIME BESTS FROM ONLINE RACES, KEYBOARD AND PHONE RANKED APART');
     addPanel(this, 30, 106, 520, 380);
     addPanel(this, 570, 106, 360, 184, false);
     addPanel(this, 570, 302, 360, 184, false);
     this.status = this.add.text(290, 290, 'LOADING . . .', mono(20, COLORS.pink)).setOrigin(0.5);
-    addFooter(this, 'LEFT / RIGHT  CHANGE DISTANCE     ESC or ENTER  BACK');
+    addFooter(this, 'LEFT / RIGHT  DISTANCE     UP / DOWN  KEYBOARD OR PHONE     ESC  BACK');
 
     const detach = attachKeyboard(window, {
       onChar: () => undefined,
       onControl: (key) => {
-        if (key === 'Escape' || key === 'Backspace' || (key === 'Enter' && this.board)) this.scene.start('title');
+        if (key === 'ArrowUp' || key === 'ArrowDown') {
+          this.phone = !this.phone;
+          this.draw();
+        } else if (key === 'Escape' || key === 'Backspace' || (key === 'Enter' && this.board)) this.scene.start('title');
         else if (key === 'Enter') void this.fetchBoards();
         else if (key === 'ArrowLeft' || key === 'ArrowRight') {
           const dir = key === 'ArrowRight' ? 1 : -1;
@@ -481,8 +494,10 @@ export class RecordsScene extends Phaser.Scene {
     this.status.setVisible(false);
 
     const event = EVENT_IDS[this.eventIndex] as EventId;
-    const rows = data.boards[RULESETS[event].id] ?? [];
-    this.put(this.add.text(46, 116, `◀  ${eventLabel(event)}  ▶   FASTEST TIMES`, mono(20, COLORS.gold)));
+    const rows = (this.phone ? data.phoneBoards : data.boards)[RULESETS[event].id] ?? [];
+    const speed = this.phone ? data.phoneTopSpeed : data.topSpeed;
+    this.put(this.add.text(46, 116, `◀  ${eventLabel(event)}  ▶   ${this.phone ? 'PHONE' : 'KEYBOARD'}`, mono(20, COLORS.gold)));
+    this.put(this.add.text(534, 120, '▲▼ SWITCH', mono(12, COLORS.dim)).setOrigin(1, 0));
     this.put(this.add.text(46, 150, '#', mono(12, COLORS.dim)));
     this.put(this.add.text(84, 150, 'ATHLETE', mono(12, COLORS.dim)));
     this.put(this.add.text(430, 150, 'TIME', mono(12, COLORS.dim)).setOrigin(1, 0));
@@ -501,15 +516,15 @@ export class RecordsScene extends Phaser.Scene {
       this.put(this.add.text(534, y, `${Math.round(r.wpm)}`, mono(18, COLORS.ice)).setOrigin(1, 0));
     });
 
-    this.put(this.add.text(586, 114, 'TOP SPEED, ANY DISTANCE', mono(15, COLORS.gold)));
-    data.topSpeed.slice(0, 5).forEach((r, i) => {
+    this.put(this.add.text(586, 114, `TOP SPEED, ${this.phone ? 'PHONE' : 'KEYBOARD'}`, mono(15, COLORS.gold)));
+    speed.slice(0, 5).forEach((r, i) => {
       const y = 144 + i * 27;
       this.put(this.add.text(586, y, `${i + 1}`, mono(15, COLORS.white)));
       this.put(addFlag(this, 606, y + 9, r.nationality, 1.5));
       this.put(this.add.text(642, y, r.name, mono(15, COLORS.white)));
       this.put(this.add.text(914, y, `${Math.round(r.wpm)} WPM`, mono(15, COLORS.ice)).setOrigin(1, 0));
     });
-    if (data.topSpeed.length === 0) this.put(this.add.text(750, 200, 'NO RACES YET', mono(14, COLORS.dim)).setOrigin(0.5));
+    if (speed.length === 0) this.put(this.add.text(750, 200, 'NO RACES YET', mono(14, COLORS.dim)).setOrigin(0.5));
 
     this.put(this.add.text(586, 310, 'MOST RACE WINS', mono(15, COLORS.gold)));
     data.mostWins.slice(0, 5).forEach((r, i) => {

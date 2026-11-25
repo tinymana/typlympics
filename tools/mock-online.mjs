@@ -116,13 +116,14 @@ export function createMockServer() {
         } catch {
           return fail(400, 'bad_log', 'The keystroke log breaks the rules of the race.');
         }
-        Object.assign(entry, { status: result.finished ? 'finished' : 'dnf', timeMs: result.timeMs, wpm: result.wpm });
+        const device = body.device === 'phone' ? 'phone' : 'keyboard';
+        Object.assign(entry, { status: result.finished ? 'finished' : 'dnf', timeMs: result.timeMs, wpm: result.wpm, device });
         let personalBest = false;
         if (result.finished) {
-          const key = `${me.id}|${ruleset.id}`;
+          const key = `${me.id}|${ruleset.id}|${device}`;
           const old = bests.get(key);
           if (!old || old.timeMs > result.timeMs) {
-            bests.set(key, { athlete: me, rulesetId: ruleset.id, timeMs: result.timeMs, wpm: result.wpm });
+            bests.set(key, { athlete: me, rulesetId: ruleset.id, device, timeMs: result.timeMs, wpm: result.wpm });
             personalBest = true;
           }
         }
@@ -144,16 +145,15 @@ export function createMockServer() {
       }
       case 'records': {
         const boards = {};
+        const phoneBoards = {};
         const all = [...bests.values()].sort((a, b) => a.timeMs - b.timeMs);
         for (const b of all) {
-          const list = (boards[b.rulesetId] ??= []);
+          const list = ((b.device === 'phone' ? phoneBoards : boards)[b.rulesetId] ??= []);
           list.push({ rank: list.length + 1, name: b.athlete.name, nationality: b.athlete.nationality, timeMs: b.timeMs, wpm: b.wpm });
         }
-        return ok({
-          boards,
-          topSpeed: [...all].sort((a, b) => b.wpm - a.wpm).map((b) => ({ name: b.athlete.name, nationality: b.athlete.nationality, wpm: b.wpm, rulesetId: b.rulesetId })),
-          mostWins: [],
-        });
+        const speed = (device) =>
+          all.filter((b) => b.device === device).sort((a, b) => b.wpm - a.wpm).map((b) => ({ name: b.athlete.name, nationality: b.athlete.nationality, wpm: b.wpm, rulesetId: b.rulesetId }));
+        return ok({ boards, phoneBoards, topSpeed: speed('keyboard'), phoneTopSpeed: speed('phone'), mostWins: [] });
       }
       default:
         return fail(400, 'bad_action', 'Unknown action.');

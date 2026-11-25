@@ -70,7 +70,11 @@ export interface BoardRow {
 }
 
 export interface Records {
+  /** Keyboard boards, by ruleset id. */
   boards: Record<string, BoardRow[]>;
+  /** Phone boards, by ruleset id. */
+  phoneBoards: Record<string, BoardRow[]>;
+  phoneTopSpeed: Array<{ name: string; nationality: string; wpm: number; rulesetId: string }>;
   topSpeed: Array<{ name: string; nationality: string; wpm: number; rulesetId: string }>;
   mostWins: Array<{ name: string; nationality: string; wins: number }>;
 }
@@ -101,7 +105,7 @@ export interface OnlineApi {
   leave(token: string, pin: string): Promise<void>;
   start(token: string, pin: string, event: string): Promise<RoomAnswer>;
   tick(token: string, raceId: string, pos: number): Promise<Position[]>;
-  submit(token: string, raceId: string, log: Array<[number, string]>): Promise<OfficialResult>;
+  submit(token: string, raceId: string, log: Array<[number, string]>, device: 'keyboard' | 'phone'): Promise<OfficialResult>;
   results(token: string, raceId: string): Promise<{ done: boolean; entries: Standing[] }>;
   records(): Promise<Records>;
 }
@@ -157,8 +161,8 @@ export function createOnlineApi(url: string = ONLINE_URL, fetchImpl: typeof fetc
       const { data } = await call('tick', { token, raceId, pos });
       return data['positions'] as Position[];
     },
-    async submit(token, raceId, log) {
-      const { data } = await call('submit', { token, raceId, log });
+    async submit(token, raceId, log, device) {
+      const { data } = await call('submit', { token, raceId, log, device });
       return data['result'] as OfficialResult;
     },
     async results(token, raceId) {
@@ -167,7 +171,13 @@ export function createOnlineApi(url: string = ONLINE_URL, fetchImpl: typeof fetc
     },
     async records() {
       const { data } = await call('records');
-      return { boards: data['boards'] as Records['boards'], topSpeed: data['topSpeed'] as Records['topSpeed'], mostWins: data['mostWins'] as Records['mostWins'] };
+      return {
+        boards: (data['boards'] ?? {}) as Records['boards'],
+        phoneBoards: (data['phoneBoards'] ?? {}) as Records['phoneBoards'],
+        topSpeed: (data['topSpeed'] ?? []) as Records['topSpeed'],
+        phoneTopSpeed: (data['phoneTopSpeed'] ?? []) as Records['phoneTopSpeed'],
+        mostWins: (data['mostWins'] ?? []) as Records['mostWins'],
+      };
     },
   };
 }

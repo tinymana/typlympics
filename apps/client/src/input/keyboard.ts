@@ -58,11 +58,34 @@ export interface KeyboardHandlers {
   onControl(key: ControlKey, timeStamp: number): void;
 }
 
+/** Id of the hidden text field that raises a phone's on-screen keyboard. */
+export const SOFT_INPUT_ID = 'soft-input';
+
+/** Everything currently listening, so touch controls can feed the same handlers. */
+const attached = new Set<KeyboardHandlers>();
+
+/** Delivers a character as if it had been typed. Used by the phone keyboard path. */
+export function injectChar(ch: string, timeStamp: number): void {
+  for (const h of [...attached]) h.onChar(ch, timeStamp);
+}
+
+/** Delivers a control key as if it had been pressed. Used by on-screen buttons. */
+export function injectControl(key: ControlKey, timeStamp: number): void {
+  for (const h of [...attached]) h.onControl(key, timeStamp);
+}
+
+function softInputFocused(): boolean {
+  return typeof document !== 'undefined' && document.activeElement?.id === SOFT_INPUT_ID;
+}
+
 /** Attaches listeners and returns a function that removes them. */
 export function attachKeyboard(target: Window, handlers: KeyboardHandlers): () => void {
   const onKeyDown = (e: KeyboardEvent): void => {
     const c = classifyKey(e);
     if (c.kind === 'ignore') return;
+    // With the phone text field focused, characters arrive through its input
+    // events instead. Leaving the key alone here lets the field receive it.
+    if (c.kind === 'char' && softInputFocused()) return;
     // Stop the browser scrolling on space, moving focus on Tab, or opening
     // quick-find on apostrophe or slash.
     e.preventDefault();
@@ -70,9 +93,11 @@ export function attachKeyboard(target: Window, handlers: KeyboardHandlers): () =
     else handlers.onControl(c.key, e.timeStamp);
   };
   const onPaste = (e: Event): void => e.preventDefault();
+  attached.add(handlers);
   target.addEventListener('keydown', onKeyDown);
   target.addEventListener('paste', onPaste);
   return () => {
+    attached.delete(handlers);
     target.removeEventListener('keydown', onKeyDown);
     target.removeEventListener('paste', onPaste);
   };
