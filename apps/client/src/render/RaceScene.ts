@@ -298,7 +298,9 @@ export class RaceScene extends Phaser.Scene {
       this.detach?.();
       this.detach = null;
       mobile.hideRaceText();
+      mobile.setTextEntry(false);
     });
+    mobile.setTextEntry(true);
 
     this.beginRace();
   }
@@ -923,10 +925,10 @@ export class RaceScene extends Phaser.Scene {
     const dt = Math.min(0.05, deltaMs / 1000);
 
     // On a phone, a Train race waits on its marks until the keyboard is open.
-    if (mobile.enabled && !this.online && this.phase === 'marks' && !mobile.keyboardFocused()) {
+    if (!this.online && this.phase === 'marks' && mobile.needsKeyboardTap()) {
       this.phaseAt = now;
-      if (this.banner.text !== 'TAP TYPE TO START') this.showBanner('TAP TYPE TO START', COLORS.gold);
-    } else if (this.phase === 'marks' && this.banner.text === 'TAP TYPE TO START') {
+      if (this.banner.text !== 'TAP TO START') this.showBanner('TAP TO START', COLORS.gold);
+    } else if (this.phase === 'marks' && this.banner.text === 'TAP TO START') {
       this.showBanner('ON YOUR MARKS', COLORS.white);
     }
 

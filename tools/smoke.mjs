@@ -465,6 +465,10 @@ try {
   await sceneOn(phone, 'login');
   await sleep(300);
   check('touch devices get the menu buttons', await phone.locator('#touch-bar').isVisible());
+  // Tapping the sign-in form itself opens the keyboard, as on an iPad.
+  await phone.locator('canvas').tap({ position: { x: 120, y: 60 } });
+  check('tapping the sign-in form opens the keyboard field', await phone.evaluate(() => document.activeElement?.id === 'soft-input'));
+  await phone.evaluate(() => document.activeElement?.blur());
   const softFocused = () => phone.evaluate(() => document.activeElement?.id === 'soft-input');
   const tapKey = (label) => phone.locator('#touch-bar .touch-key', { hasText: label }).first().tap();
   await tapKey('TYPE');
@@ -496,7 +500,7 @@ try {
     const r = window.__typlympics.scene.getScene('race');
     return { phase: r.phase, banner: r.banner.text };
   });
-  check('a phone race waits on its marks until the keyboard is open', waiting.phase === 'marks' && waiting.banner === 'TAP TYPE TO START', JSON.stringify(waiting));
+  check('a phone race waits on its marks until the keyboard is open', waiting.phase === 'marks' && waiting.banner === 'TAP TO START', JSON.stringify(waiting));
   await phone.screenshot({ path: join(outDir, '31-phone-waiting.png') });
   await phone.locator('#race-text').tap(); // tapping the text opens the keyboard too
   check('tapping the race text opens the keyboard', await softFocused());

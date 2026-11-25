@@ -2,6 +2,25 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.11.1",
+      "date": "2026-11-24",
+      "title": "iPad fixes",
+      "items": [
+        {
+          "tag": "fixed",
+          "text": "iPads now get the touch controls, including iPads with a keyboard case."
+        },
+        {
+          "tag": "improved",
+          "text": "Tap the sign-in form, a PIN screen or the race itself to open the keyboard. You no longer have to find the TYPE button first."
+        },
+        {
+          "tag": "improved",
+          "text": "If a physical keyboard is attached, races start without waiting for the on-screen one."
+        }
+      ]
+    },
+    {
       "version": "0.11",
       "date": "2026-11-24",
       "title": "Weekly medals",
