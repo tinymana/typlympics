@@ -99,6 +99,17 @@ export function createMockServer() {
         Object.assign(room, { race, state: 'racing', event });
         return ok({ room: roomState(room), you: me.id });
       }
+      case 'voice': {
+        const room = rooms.get(body.pin);
+        const member = room?.members.find((m) => m.athlete.id === me.id);
+        if (!member) return fail(403, 'not_member', 'You are not in that room.');
+        member.voice = body.on !== false;
+        room.signals ??= [];
+        for (const s of body.send ?? []) room.signals.push({ from: me.id, to: s.to, data: s.data });
+        const mine = room.signals.filter((s) => s.to === me.id);
+        room.signals = room.signals.filter((s) => s.to !== me.id);
+        return ok({ peers: room.members.filter((m) => m.voice && m.athlete.id !== me.id).map((m) => m.athlete.id), signals: mine.map((s) => ({ from: s.from, data: s.data })) });
+      }
       case 'tick': {
         const race = races.get(body.raceId);
         const entry = race?.entries.get(me.id);

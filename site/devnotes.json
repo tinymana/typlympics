@@ -2,6 +2,25 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.15",
+      "date": "2026-11-25",
+      "title": "Voice chat",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Voice chat in race rooms. Press V (or tap the line under the room PIN) to join, and again to mute your microphone. It stays on through the race, the results and rematches."
+        },
+        {
+          "tag": "new",
+          "text": "Each lane shows who is in voice and whether you are connected to them."
+        },
+        {
+          "tag": "improved",
+          "text": "Audio goes straight between players' browsers and is never sent to or stored on the game server. On some mobile and office networks a pair of players may not connect; the lane shows NO LINK when that happens."
+        }
+      ]
+    },
+    {
       "version": "0.14",
       "date": "2026-11-24",
       "title": "Rematch, a starter's voice and a shorter programme",

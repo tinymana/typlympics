@@ -158,6 +158,20 @@ export interface OnlineApi {
   weekly(): Promise<Weekly>;
   hall(month?: string): Promise<Hall>;
   myMedals(token: string): Promise<MyMedals>;
+  /** Voice chat mailbox: check in, drop off and pick up connection messages. */
+  voice(token: string, pin: string, on: boolean, send: VoiceSignal[]): Promise<VoiceAnswer>;
+}
+
+/** A connection message for one other athlete in the room. */
+export interface VoiceSignal {
+  to: string;
+  data: Record<string, unknown>;
+}
+
+export interface VoiceAnswer {
+  /** Athletes in the room who have voice chat on. */
+  peers: string[];
+  signals: Array<{ from: string; data: Record<string, unknown> }>;
 }
 
 type Json = Record<string, unknown>;
@@ -203,6 +217,10 @@ export function createOnlineApi(url: string = ONLINE_URL, fetchImpl: typeof fetc
     host: (token, event, device) => roomCall('host', { token, event, device }),
     join: (token, pin, device) => roomCall('join', { token, pin, device }),
     room: (token, pin, device) => roomCall('room', { token, pin, device }),
+    async voice(token, pin, on, send) {
+      const { data } = await call('voice', { token, pin, on, send });
+      return { peers: (data['peers'] ?? []) as string[], signals: (data['signals'] ?? []) as VoiceAnswer['signals'] };
+    },
     async leave(token, pin) {
       await call('leave', { token, pin });
     },

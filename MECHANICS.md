@@ -144,3 +144,10 @@ should a distance need a minimum number of athletes before medals are given?
   device's speech engine. The gun sound and flash remain the start signal.
 - **Sound switch.** M on the title screen (or a tap on the label) turns all
   sound off or on; remembered per device.
+
+## Voice chat (approved 25 Nov 2026)
+
+Optional, per room, off until a player presses V. Audio is peer to peer and
+never reaches the server. No relay server yet (free tier first), so some
+pairs of players on strict networks will not connect. Voice has no effect on
+race results.
