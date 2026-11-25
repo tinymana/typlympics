@@ -5,6 +5,15 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed (touch)
+
+- Touch mode now turns on for any device with a touch screen, not only
+  touch-first ones, so iPads with a keyboard or trackpad get the controls.
+- Tapping the game on a screen that takes typing (sign-in, PIN entry, a
+  race) opens the on-screen keyboard.
+- A race no longer waits for the on-screen keyboard once a physical key
+  press has been seen.
+
 ### Added (weekly medals)
 
 - Database (migration 0004): `weekly_medals`, `weeks_closed` and the

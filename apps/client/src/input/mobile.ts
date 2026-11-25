@@ -1,4 +1,4 @@
-import { injectChar, injectControl, SOFT_INPUT_ID, type ControlKey } from './keyboard';
+import { injectChar, injectControl, physicalKeyboardSeen, SOFT_INPUT_ID, type ControlKey } from './keyboard';
 
 /**
  * Phone and tablet support: an on-screen keyboard to type with, and
@@ -39,13 +39,17 @@ class MobileUi {
   private softCharsThisRace = 0;
   private raceTextShown = false;
   private refresh: (() => void) | null = null;
+  private textEntry = false;
   private actionButton: HTMLElement | null = null;
   private actionHandler: (() => void) | null = null;
 
   /** Sets up touch controls on touch-first devices. Does nothing on a desktop. */
   init(onLayout: () => void): void {
+    // Any touch screen counts, not only touch-first devices: an iPad with a
+    // keyboard case reports a fine pointer but is still tapped with a finger.
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-    if (!coarse && !hooks().__typlympicsTouch) return;
+    const touch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+    if (!coarse && !touch && !hooks().__typlympicsTouch) return;
     this.enabled = true;
     this.refresh = onLayout;
     document.body.classList.add('touch');
@@ -85,6 +89,13 @@ class MobileUi {
       this.focusKeyboard();
     });
     document.body.append(this.raceText);
+
+    // On screens that take typing, tapping the game itself opens the keyboard:
+    // people tap the field they want to fill in, not a separate button.
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.textEntry || e.pointerType === 'mouse') return;
+      if (e.target instanceof HTMLCanvasElement) this.focusKeyboard();
+    });
 
     const vv = window.visualViewport;
     vv?.addEventListener('resize', () => this.layout());
@@ -147,6 +158,19 @@ class MobileUi {
     if (!this.actionButton) return;
     this.actionButton.hidden = !label;
     this.actionButton.textContent = label ?? '';
+  }
+
+  /** Screens that take typing call this, so a tap on the game opens the keyboard. */
+  setTextEntry(on: boolean): void {
+    this.textEntry = on;
+  }
+
+  /**
+   * True when the player has to open the on-screen keyboard before they can
+   * type: a touch device with no physical keyboard in evidence.
+   */
+  needsKeyboardTap(): boolean {
+    return this.enabled && !this.keyboardFocused() && !physicalKeyboardSeen();
   }
 
   /** Puts the phone keyboard away, which brings the menu buttons back. */

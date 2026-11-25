@@ -115,7 +115,12 @@ export class CompeteScene extends Phaser.Scene {
     }
 
     const detach = attachKeyboard(window, { onChar: (ch) => this.onChar(ch), onControl: (key) => void this.onControl(key) });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, detach);
+    // PIN entry: tapping the game opens the keyboard.
+    mobile.setTextEntry(true);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      detach();
+      mobile.setTextEntry(false);
+    });
     this.refresh();
     if (this.step === 'menu') void this.joinInvite();
   }

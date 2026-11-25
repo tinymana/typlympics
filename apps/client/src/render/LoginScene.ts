@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SPRINT_100M_V1, formatTime } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
+import { mobile } from '../input/mobile';
 import { COUNTRIES, DEFAULT_COUNTRY_INDEX, countryName, findCountry } from '../storage/countries';
 import {
   GUEST_ID,
@@ -95,7 +96,10 @@ export class LoginScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.detach?.();
       this.detach = null;
+      mobile.setTextEntry(false);
     });
+    // Tapping anywhere on the sign-in form opens the keyboard.
+    mobile.setTextEntry(true);
     this.refresh();
   }
 
@@ -349,7 +353,7 @@ export class LoginScene extends Phaser.Scene {
 
     if (this.step === 'name') {
       this.heading.setText('ENTER YOUR NAME');
-      this.hint.setText(this.save.activeProfileId ? 'ENTER: next     ESC: back to title' : 'ENTER: next');
+      this.hint.setText(`${mobile.needsKeyboardTap() ? 'TAP HERE TO TYPE     ' : ''}${this.save.activeProfileId ? 'ENTER: next     ESC: back to title' : 'ENTER: next'}`);
     } else if (this.step === 'nation') {
       this.heading.setText('NEW ATHLETE: PICK YOUR NATIONALITY');
       this.hint.setText('ARROWS or type to search     ENTER: next     ESC: back');

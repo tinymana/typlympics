@@ -74,6 +74,13 @@ export function injectControl(key: ControlKey, timeStamp: number): void {
   for (const h of [...attached]) h.onControl(key, timeStamp);
 }
 
+let physicalKeySeen = false;
+
+/** True once a real key press has arrived, which means a physical keyboard is attached. */
+export function physicalKeyboardSeen(): boolean {
+  return physicalKeySeen;
+}
+
 function softInputFocused(): boolean {
   return typeof document !== 'undefined' && document.activeElement?.id === SOFT_INPUT_ID;
 }
@@ -89,6 +96,7 @@ export function attachKeyboard(target: Window, handlers: KeyboardHandlers): () =
     // Stop the browser scrolling on space, moving focus on Tab, or opening
     // quick-find on apostrophe or slash.
     e.preventDefault();
+    if (c.kind === 'char') physicalKeySeen = true;
     if (c.kind === 'char') handlers.onChar(c.ch, e.timeStamp);
     else handlers.onControl(c.key, e.timeStamp);
   };
