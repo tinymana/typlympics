@@ -4,7 +4,22 @@ import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { mobile } from '../input/mobile';
 import { hasPendingInvite, sendInvite, takePendingInvite } from '../net/invite';
-import { OnlineError, gunTimeFrom, online, type Records, type RoomAnswer, type RoomState } from '../net/online';
+import {
+  MEDAL_COLORS,
+  MEDAL_NAMES,
+  OnlineError,
+  countdown,
+  gunTimeFrom,
+  monthLabel,
+  online,
+  weekLabel,
+  type BoardRow,
+  type Hall,
+  type Records,
+  type RoomAnswer,
+  type RoomState,
+  type Weekly,
+} from '../net/online';
 import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, persistSave, type KeyValueStore, type Profile, type Save } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
 import { addFlag, flagKey, flagWidth } from './flags';
@@ -471,14 +486,28 @@ export class LobbyScene extends Phaser.Scene {
 
 // ------------------------------------------------------------------ WORLD RECORDS
 
-/** World Records: the all-time boards, straight from the server. */
+type View = 'week' | 'alltime' | 'hall';
+const VIEWS: readonly View[] = ['week', 'alltime', 'hall'];
+const VIEW_TITLE: Record<View, string> = { week: 'THIS WEEK', alltime: 'ALL TIME', hall: 'HALL OF FAME' };
+
+/**
+ * World Records: three boards from online races.
+ *  - This week: the running standings; the top three hold the medal spots.
+ *  - All time: the fastest times ever.
+ *  - Hall of fame: every weekly medal, by month, and the medal table.
+ * Keyboard and phone results are always ranked apart.
+ */
 export class RecordsScene extends Phaser.Scene {
   private eventIndex = 0;
-  private board: Records | null = null;
-  /** Which board is showing. Keyboard and phone results are ranked apart. */
   private phone = false;
+  private view: View = 'week';
+  private monthIndex = 0;
+  private allTime: Records | null = null;
+  private week: Weekly | null = null;
+  private hallData: Hall | null = null;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private status!: Phaser.GameObjects.Text;
+  private subtitle!: Phaser.GameObjects.Text;
 
   constructor() {
     super('records');
@@ -488,45 +517,82 @@ export class RecordsScene extends Phaser.Scene {
     if (!context(this)) return;
     ensureTextures(this);
     this.objects = [];
-    this.board = null;
+    this.allTime = null;
+    this.week = null;
+    this.hallData = null;
+    this.view = 'week';
+    this.monthIndex = 0;
     this.phone = mobile.enabled;
     addBackdrop(this);
-    addHeading(this, 'WORLD RECORDS', 'ALL-TIME BESTS FROM ONLINE RACES, KEYBOARD AND PHONE RANKED APART');
+    addHeading(this, 'WORLD RECORDS');
+    this.subtitle = this.add.text(GAME_W / 2, 84, '', mono(16, COLORS.ice)).setOrigin(0.5);
     addPanel(this, 30, 106, 520, 380);
     addPanel(this, 570, 106, 360, 184, false);
     addPanel(this, 570, 302, 360, 184, false);
-    this.status = this.add.text(290, 290, 'LOADING . . .', mono(20, COLORS.pink)).setOrigin(0.5);
-    addFooter(this, 'LEFT / RIGHT  DISTANCE     UP / DOWN  KEYBOARD OR PHONE     ESC  BACK');
+    this.status = this.add.text(290, 290, 'LOADING . . .', mono(20, COLORS.pink, { align: 'center' })).setOrigin(0.5);
+    addFooter(this, 'ENTER  NEXT BOARD     ◀ ▶  DISTANCE OR MONTH     ▲ ▼  KEYBOARD / PHONE     ESC  BACK');
 
     const detach = attachKeyboard(window, {
       onChar: () => undefined,
       onControl: (key) => {
-        if (key === 'ArrowUp' || key === 'ArrowDown') {
+        if (key === 'Escape' || key === 'Backspace') {
+          this.scene.start('title');
+        } else if (key === 'Enter' || key === 'Tab') {
+          this.view = VIEWS[(VIEWS.indexOf(this.view) + 1) % VIEWS.length] as View;
+          void this.show();
+        } else if (key === 'ArrowUp' || key === 'ArrowDown') {
           this.phone = !this.phone;
           this.draw();
-        } else if (key === 'Escape' || key === 'Backspace' || (key === 'Enter' && this.board)) this.scene.start('title');
-        else if (key === 'Enter') void this.fetchBoards();
-        else if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        } else if (key === 'ArrowLeft' || key === 'ArrowRight') {
           const dir = key === 'ArrowRight' ? 1 : -1;
-          this.eventIndex = (this.eventIndex + dir + EVENT_IDS.length) % EVENT_IDS.length;
-          this.draw();
+          if (this.view === 'hall') void this.changeMonth(-dir);
+          else {
+            this.eventIndex = (this.eventIndex + dir + EVENT_IDS.length) % EVENT_IDS.length;
+            this.draw();
+          }
         }
       },
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, detach);
-    void this.fetchBoards();
+    void this.show();
   }
 
-  private async fetchBoards(): Promise<void> {
-    this.status.setText('LOADING . . .').setVisible(true);
-    try {
-      const data = await online.records();
-      if (!this.scene.isActive()) return;
-      this.board = data;
-      this.draw();
-    } catch (e) {
-      if (this.scene.isActive()) this.status.setText(`${message(e)}\n\nENTER: TRY AGAIN`).setAlign('center');
+  private hasData(): boolean {
+    return this.view === 'week' ? this.week !== null : this.view === 'alltime' ? this.allTime !== null : this.hallData !== null;
+  }
+
+  /** Loads the current view's data if it is not here yet, then draws it. */
+  private async show(): Promise<void> {
+    const view = this.view;
+    this.subtitle.setText(`${VIEW_TITLE[view]}   ·   KEYBOARD AND PHONE RANKED APART`);
+    if (!this.hasData()) {
+      this.clear();
+      this.status.setText('LOADING . . .').setVisible(true);
+      try {
+        if (view === 'week') this.week = await online.weekly();
+        else if (view === 'alltime') this.allTime = await online.records();
+        else this.hallData = await online.hall();
+      } catch (e) {
+        if (this.scene.isActive() && this.view === view) this.status.setText(`${message(e)}\n\nENTER: NEXT BOARD`);
+        return;
+      }
     }
+    if (this.scene.isActive() && this.view === view) this.draw();
+  }
+
+  private async changeMonth(step: number): Promise<void> {
+    const hall = this.hallData;
+    if (!hall || hall.months.length === 0) return;
+    const next = Phaser.Math.Clamp(this.monthIndex + step, 0, hall.months.length - 1);
+    if (next === this.monthIndex) return;
+    this.monthIndex = next;
+    try {
+      this.hallData = await online.hall(hall.months[next]);
+    } catch (e) {
+      this.status.setText(message(e)).setVisible(true);
+      return;
+    }
+    if (this.scene.isActive()) this.draw();
   }
 
   private put<T extends Phaser.GameObjects.GameObject>(obj: T): T {
@@ -534,54 +600,144 @@ export class RecordsScene extends Phaser.Scene {
     return obj;
   }
 
-  private draw(): void {
-    const data = this.board;
-    if (!data) return;
+  private clear(): void {
     for (const o of this.objects) o.destroy();
     this.objects = [];
-    this.status.setVisible(false);
+  }
 
-    const event = EVENT_IDS[this.eventIndex] as EventId;
-    const rows = (this.phone ? data.phoneBoards : data.boards)[RULESETS[event].id] ?? [];
-    const speed = this.phone ? data.phoneTopSpeed : data.topSpeed;
-    this.put(this.add.text(46, 116, `◀  ${eventLabel(event)}  ▶   ${this.phone ? 'PHONE' : 'KEYBOARD'}`, mono(20, COLORS.gold)));
-    this.put(this.add.text(534, 120, '▲▼ SWITCH', mono(12, COLORS.dim)).setOrigin(1, 0));
+  private draw(): void {
+    if (!this.hasData()) return;
+    this.clear();
+    this.status.setVisible(false);
+    if (this.view === 'week') this.drawWeek(this.week as Weekly);
+    else if (this.view === 'alltime') this.drawAllTime(this.allTime as Records);
+    else this.drawHall(this.hallData as Hall);
+  }
+
+  private deviceName(): string {
+    return this.phone ? 'PHONE' : 'KEYBOARD';
+  }
+
+  /** The main board: rank, flag, name, time, WPM. Top three in medal colours. */
+  private drawBoard(title: string, rows: BoardRow[], empty: string): void {
+    this.put(this.add.text(46, 116, title, mono(19, COLORS.gold)));
     this.put(this.add.text(46, 150, '#', mono(12, COLORS.dim)));
     this.put(this.add.text(84, 150, 'ATHLETE', mono(12, COLORS.dim)));
     this.put(this.add.text(430, 150, 'TIME', mono(12, COLORS.dim)).setOrigin(1, 0));
     this.put(this.add.text(534, 150, 'WPM', mono(12, COLORS.dim)).setOrigin(1, 0));
-    if (rows.length === 0) {
-      this.put(this.add.text(290, 300, 'NO TIMES YET.\nHOST A RACE AND SET THE FIRST.', mono(16, COLORS.dim, { align: 'center' })).setOrigin(0.5));
-    }
-    const medal = [COLORS.gold, '#d9dde8', '#e0915a'];
+    if (rows.length === 0) this.put(this.add.text(290, 300, empty, mono(16, COLORS.dim, { align: 'center' })).setOrigin(0.5));
     rows.slice(0, 10).forEach((r, i) => {
       const y = 172 + i * 30;
-      const color = medal[i] ?? COLORS.white;
+      const color = MEDAL_COLORS[r.rank - 1] ?? COLORS.white;
       this.put(this.add.text(46, y, `${r.rank}`, mono(18, color)));
       this.put(addFlag(this, 84, y + 10, r.nationality));
       this.put(this.add.text(84 + flagWidth() + 8, y, r.name, mono(18, color)));
       this.put(this.add.text(430, y, formatTime(r.timeMs), mono(18, color)).setOrigin(1, 0));
       this.put(this.add.text(534, y, `${Math.round(r.wpm)}`, mono(18, COLORS.ice)).setOrigin(1, 0));
     });
+  }
 
-    this.put(this.add.text(586, 114, `TOP SPEED, ${this.phone ? 'PHONE' : 'KEYBOARD'}`, mono(15, COLORS.gold)));
-    speed.slice(0, 5).forEach((r, i) => {
-      const y = 144 + i * 27;
-      this.put(this.add.text(586, y, `${i + 1}`, mono(15, COLORS.white)));
-      this.put(addFlag(this, 606, y + 9, r.nationality, 1.5));
-      this.put(this.add.text(642, y, r.name, mono(15, COLORS.white)));
-      this.put(this.add.text(914, y, `${Math.round(r.wpm)} WPM`, mono(15, COLORS.ice)).setOrigin(1, 0));
+  /** A short list in one of the right-hand panels. */
+  private drawSide(top: number, title: string, lines: Array<{ flag?: string; left: string; right: string; color?: string }>, empty: string): void {
+    this.put(this.add.text(586, top + 8, title, mono(15, COLORS.gold)));
+    if (lines.length === 0) this.put(this.add.text(750, top + 96, empty, mono(13, COLORS.dim, { align: 'center' })).setOrigin(0.5));
+    lines.slice(0, 5).forEach((l, i) => {
+      const y = top + 38 + i * 27;
+      if (l.flag) this.put(addFlag(this, 586, y + 9, l.flag, 1.5));
+      this.put(this.add.text(l.flag ? 622 : 586, y, l.left, mono(15, l.color ?? COLORS.white)));
+      this.put(this.add.text(914, y, l.right, mono(15, COLORS.ice)).setOrigin(1, 0));
     });
-    if (speed.length === 0) this.put(this.add.text(750, 200, 'NO RACES YET', mono(14, COLORS.dim)).setOrigin(0.5));
+  }
 
-    this.put(this.add.text(586, 310, 'MOST RACE WINS', mono(15, COLORS.gold)));
-    data.mostWins.slice(0, 5).forEach((r, i) => {
-      const y = 340 + i * 27;
-      this.put(this.add.text(586, y, `${i + 1}`, mono(15, COLORS.white)));
-      this.put(addFlag(this, 606, y + 9, r.nationality, 1.5));
-      this.put(this.add.text(642, y, r.name, mono(15, COLORS.white)));
-      this.put(this.add.text(914, y, `${r.wins}`, mono(15, COLORS.ice)).setOrigin(1, 0));
+  private drawWeek(week: Weekly): void {
+    const event = EVENT_IDS[this.eventIndex] as EventId;
+    const rulesetId = RULESETS[event].id;
+    const rows = (this.phone ? week.phoneBoards : week.boards)[rulesetId] ?? [];
+    this.drawBoard(
+      `◀ ${eventLabel(event)} ▶  ${this.deviceName()}  ·  ENDS IN ${countdown(week.endsInMs)}`,
+      rows,
+      'NO TIMES THIS WEEK YET.\nRACE ONLINE TO TAKE A MEDAL SPOT.',
+    );
+    const device = this.phone ? 'phone' : 'keyboard';
+    const last = week.lastWeek;
+    const medals = last ? last.medals.filter((m) => m.rulesetId === rulesetId && m.device === device) : [];
+    this.drawSide(
+      106,
+      last ? `LAST WEEK'S MEDALS (${weekLabel(last.weekStart)})` : "LAST WEEK'S MEDALS",
+      medals.map((m) => ({ flag: m.nationality, left: `${MEDAL_NAMES[m.rank - 1] ?? ''}  ${m.name}`, right: formatTime(m.timeMs), color: MEDAL_COLORS[m.rank - 1] })),
+      last ? 'NO MEDALS AT THIS DISTANCE\nLAST WEEK' : 'THE FIRST MEDALS ARE AWARDED\nWHEN THIS WEEK ENDS',
+    );
+    this.put(this.add.text(586, 310, 'HOW MEDALS WORK', mono(15, COLORS.gold)));
+    this.put(
+      this.add.text(
+        586,
+        338,
+        `Week of ${weekLabel(week.weekStart)}, Monday to Sunday (UTC).\nYour best online time each week counts.\nTop three at each distance take gold,\nsilver and bronze when the week ends.\nKeyboard and phone have their own medals.`,
+        mono(13, COLORS.ice, { lineSpacing: 6 }),
+      ),
+    );
+  }
+
+  private drawAllTime(data: Records): void {
+    const event = EVENT_IDS[this.eventIndex] as EventId;
+    const rows = (this.phone ? data.phoneBoards : data.boards)[RULESETS[event].id] ?? [];
+    const speed = this.phone ? data.phoneTopSpeed : data.topSpeed;
+    this.drawBoard(`◀ ${eventLabel(event)} ▶  ${this.deviceName()}  ·  FASTEST EVER`, rows, 'NO TIMES YET.\nHOST A RACE AND SET THE FIRST.');
+    this.drawSide(
+      106,
+      `TOP SPEED, ${this.deviceName()}`,
+      speed.map((r, i) => ({ flag: r.nationality, left: `${i + 1}  ${r.name}`, right: `${Math.round(r.wpm)} WPM` })),
+      'NO RACES YET',
+    );
+    this.drawSide(
+      302,
+      'MOST RACE WINS',
+      data.mostWins.map((r, i) => ({ flag: r.nationality, left: `${i + 1}  ${r.name}`, right: `${r.wins}` })),
+      'NO WINS YET',
+    );
+  }
+
+  private drawHall(hall: Hall): void {
+    const event = EVENT_IDS[this.eventIndex] as EventId;
+    const rulesetId = RULESETS[event].id;
+    const device = this.phone ? 'phone' : 'keyboard';
+    const month = hall.month;
+    this.put(this.add.text(46, 116, month ? `◀ ${monthLabel(month)} ▶  ${eventLabel(event)}  ${this.deviceName()}` : 'HALL OF FAME', mono(19, COLORS.gold)));
+    const medals = hall.medals.filter((m) => m.rulesetId === rulesetId && m.device === device);
+    if (medals.length === 0) {
+      this.put(
+        this.add
+          .text(290, 300, month ? `NO ${eventLabel(event)} ${this.deviceName()} MEDALS\nIN ${monthLabel(month)}.\n\nENTER: THIS WEEK'S BOARD HAS THE DISTANCE PICKER` : 'NO MEDALS HAVE BEEN AWARDED YET.\nTHE FIRST WEEK ENDS SOON.', mono(15, COLORS.dim, { align: 'center' }))
+          .setOrigin(0.5),
+      );
+    }
+    this.put(this.add.text(46, 150, 'WEEK OF', mono(12, COLORS.dim)));
+    this.put(this.add.text(150, 150, 'MEDAL', mono(12, COLORS.dim)));
+    this.put(this.add.text(244, 150, 'ATHLETE', mono(12, COLORS.dim)));
+    this.put(this.add.text(534, 150, 'TIME', mono(12, COLORS.dim)).setOrigin(1, 0));
+    medals.slice(0, 12).forEach((m, i) => {
+      const y = 172 + i * 25;
+      const color = MEDAL_COLORS[m.rank - 1] ?? COLORS.white;
+      this.put(this.add.text(46, y, weekLabel(m.weekStart), mono(15, COLORS.ice)));
+      this.put(this.add.text(150, y, MEDAL_NAMES[m.rank - 1] ?? '', mono(15, color)));
+      this.put(addFlag(this, 244, y + 9, m.nationality, 1.5));
+      this.put(this.add.text(280, y, m.name, mono(15, color)));
+      this.put(this.add.text(534, y, formatTime(m.timeMs), mono(15, color)).setOrigin(1, 0));
     });
-    if (data.mostWins.length === 0) this.put(this.add.text(750, 396, 'NO WINS YET', mono(14, COLORS.dim)).setOrigin(0.5));
+    this.drawSide(
+      106,
+      'MEDAL TABLE, ALL TIME',
+      hall.medalTable.map((r) => ({ flag: r.nationality, left: r.name, right: `${r.gold}G ${r.silver}S ${r.bronze}B` })),
+      'NO MEDALS YET',
+    );
+    this.put(this.add.text(586, 310, 'BROWSING', mono(15, COLORS.gold)));
+    this.put(
+      this.add.text(
+        586,
+        338,
+        `Left and right change the month.\nUp and down switch keyboard and phone.\nThe distance is the one chosen on the\nother boards (${eventLabel(event)}).\n${hall.months.length} month${hall.months.length === 1 ? '' : 's'} on record.`,
+        mono(13, COLORS.ice, { lineSpacing: 6 }),
+      ),
+    );
   }
 }

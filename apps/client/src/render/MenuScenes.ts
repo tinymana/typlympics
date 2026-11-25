@@ -3,6 +3,7 @@ import { RIVALS, allRivalsBeaten, nextRival } from '@typlympics/content';
 import { EVENT_IDS, RULESETS, eventLabel, formatTime, medalFor, rulesetFor, type EventId, type SprintRuleset } from '@typlympics/sim';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard } from '../input/keyboard';
+import { MEDAL_NAMES, online, weekLabel } from '../net/online';
 import { FORM_WINDOW, careerStats } from '../storage/career';
 import { countryName } from '../storage/countries';
 import {
@@ -395,8 +396,30 @@ export class CareerScene extends Phaser.Scene {
     // Right, below: weekly medals.
     addPanel(this, 490, 400, 440, 44, false);
     this.add.text(506, 408, 'WEEKLY MEDALS', mono(15, COLORS.gold));
-    this.add.text(914, 408, 'GOLD 0   SILVER 0   BRONZE 0', mono(14, COLORS.white)).setOrigin(1, 0);
-    this.add.text(506, 426, 'Awarded once online leaderboards open.', mono(11, COLORS.dim));
+    const medalCounts = this.add.text(914, 408, 'GOLD -   SILVER -   BRONZE -', mono(14, COLORS.white)).setOrigin(1, 0);
+    const medalNote = this.add.text(506, 426, '', mono(11, COLORS.dim));
+    // Medals are won online, at any distance, so they are fetched rather than stored here.
+    const token = profile.online?.token;
+    if (!token) {
+      medalNote.setText('Go online in COMPETE to race for weekly medals.');
+    } else {
+      medalNote.setText('Checking . . .');
+      online
+        .myMedals(token)
+        .then((mine) => {
+          if (!this.scene.isActive()) return;
+          medalCounts.setText(`GOLD ${mine.gold}   SILVER ${mine.silver}   BRONZE ${mine.bronze}`);
+          const latest = mine.medals[0];
+          medalNote.setText(
+            latest
+              ? `Latest: ${MEDAL_NAMES[latest.rank - 1] ?? ''} ${latest.rulesetId.split('@')[0]?.toUpperCase() ?? ''} ${latest.device.toUpperCase()}, week of ${weekLabel(latest.weekStart)}`
+              : 'No medals yet. The top three each week take gold, silver and bronze.',
+          );
+        })
+        .catch(() => {
+          if (this.scene.isActive()) medalNote.setText('Could not reach the server to check your medals.');
+        });
+    }
 
     addFooter(this, 'LEFT / RIGHT  CHANGE DISTANCE     ESC or ENTER  BACK');
 

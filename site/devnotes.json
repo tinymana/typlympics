@@ -2,6 +2,37 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.11",
+      "date": "2026-11-24",
+      "title": "Weekly medals",
+      "items": [
+        {
+          "tag": "new",
+          "text": "Every week, Monday to Sunday, the three fastest athletes at each distance take gold, silver and bronze. Your best online time of the week is the one that counts."
+        },
+        {
+          "tag": "new",
+          "text": "World Records now opens on This Week: the running standings, with the top three holding the medal spots and a countdown to the end of the week."
+        },
+        {
+          "tag": "new",
+          "text": "Last week's medallists are shown beside the board, and you get an announcement on the title screen when you win one."
+        },
+        {
+          "tag": "new",
+          "text": "Hall of Fame: every weekly medal ever awarded, browsable by month, plus the all-time medal table."
+        },
+        {
+          "tag": "new",
+          "text": "Your career page shows your gold, silver and bronze count."
+        },
+        {
+          "tag": "improved",
+          "text": "Keyboard and phone each have their own medals, as they do their own records."
+        }
+      ]
+    },
+    {
       "version": "0.10",
       "date": "2026-11-24",
       "title": "Text a friend an invite",

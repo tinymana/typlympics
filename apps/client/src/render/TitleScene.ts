@@ -6,6 +6,7 @@ import titleArtUrl from '../assets/title_art.webp';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { hasPendingInvite } from '../net/invite';
+import { MEDAL_NAMES, online, weekLabel, type Medal } from '../net/online';
 import { activeProfile, browserStore, loadSave, verifyRecord } from '../storage/save';
 import { COLORS, FONT_MONO, GAME_W } from './layout';
 import { addFlag, flagWidth } from './flags';
@@ -25,6 +26,9 @@ const MENU = [
   { label: 'CAREER', scene: 'career' },
   { label: 'WORLD RECORDS', scene: 'records' },
 ] as const;
+
+/** Medals are looked up once per visit to the game, not on every return to the title. */
+let medalsChecked = false;
 
 /** Remembered between visits so Esc returns to the row you came from. */
 let lastSelected = 0;
@@ -108,6 +112,8 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.tweens.add({ targets: prompt, alpha: 0.35, duration: 620, yoyo: true, repeat: -1 });
 
+    this.announceMedals(profile.online);
+
     this.detach = attachKeyboard(window, {
       onChar: (ch) => {
         if (ch === ' ') this.choose();
@@ -119,6 +125,49 @@ export class TitleScene extends Phaser.Scene {
       this.detach = null;
     });
     this.refresh();
+  }
+
+  /**
+   * Announces medals from the most recent week the athlete won any, once.
+   * Which week was last announced is remembered on this device.
+   */
+  private announceMedals(session: { token: string; athleteId: string } | null): void {
+    if (!session || medalsChecked) return;
+    medalsChecked = true;
+    const key = `typlympics.medalNotice.${session.athleteId}`;
+    online
+      .myMedals(session.token)
+      .then((mine) => {
+        const week = mine.medals[0]?.weekStart;
+        if (!week || !this.scene.isActive()) return;
+        let seen: string | null = null;
+        try {
+          seen = window.localStorage.getItem(key);
+        } catch {
+          seen = null;
+        }
+        if (seen === week) return;
+        const won = mine.medals.filter((m: Medal) => m.weekStart === week);
+        const first = won[0] as Medal;
+        const text =
+          won.length === 1
+            ? `YOU WON ${MEDAL_NAMES[first.rank - 1] ?? 'A MEDAL'} IN THE ${first.rulesetId.split('@')[0]?.toUpperCase() ?? ''}, WEEK OF ${weekLabel(week)}!`
+            : `YOU WON ${won.length} MEDALS, WEEK OF ${weekLabel(week)}!`;
+        const banner = this.add
+          .text(GAME_W / 2, 64, text, { fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: COLORS.gold, stroke: COLORS.ink, strokeThickness: 6, backgroundColor: '#120824', padding: { x: 14, y: 8 } })
+          .setOrigin(0.5)
+          .setDepth(10);
+        this.tweens.add({ targets: banner, scale: 1.06, duration: 500, yoyo: true, repeat: -1 });
+        this.sfx.record();
+        try {
+          window.localStorage.setItem(key, week);
+        } catch {
+          // Without storage the announcement simply shows again next visit.
+        }
+      })
+      .catch(() => {
+        medalsChecked = false; // offline now; try again next time the title shows
+      });
   }
 
   private onControl(key: ControlKey): void {

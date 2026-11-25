@@ -443,9 +443,98 @@ async function records(): Promise<Row> {
   };
 }
 
+// ------------------------------------------------------------ weekly medals
+
+function medalRow(m: Row): Row {
+  return { weekStart: m.week_start, rulesetId: m.ruleset_id, device: m.device, rank: m.rank, name: m.name, nationality: m.nationality, timeMs: m.time_ms };
+}
+
+/**
+ * This week's standings and last week's medallists. A week runs Monday
+ * 00:00 UTC to the next Monday. Any week that has ended is closed here, on
+ * the first request after it ends, and its medals are stored for good.
+ */
+async function weekly(): Promise<Row> {
+  await sql`select typlympics.close_weeks()`;
+  const clock: Row[] = await sql`
+    select to_char(date_trunc('week', now() at time zone 'utc'), 'YYYY-MM-DD') as week_start,
+           extract(epoch from ((date_trunc('week', now() at time zone 'utc') + interval '7 days') - (now() at time zone 'utc'))) * 1000 as ends_in_ms`;
+  const rows: Row[] = await sql`
+    with best as (
+      select r.ruleset_id, e.device, e.athlete_id, min(e.time_ms) as time_ms
+      from typlympics.race_entries e join typlympics.races r on r.id = e.race_id
+      where e.status = 'finished'
+        and e.submitted_at >= (date_trunc('week', now() at time zone 'utc') at time zone 'utc')
+      group by 1, 2, 3
+    ),
+    ranked as (
+      select b.*, rank() over (partition by ruleset_id, device order by time_ms) as place from best b
+    )
+    select k.ruleset_id, k.device, k.place, k.time_ms, a.name, a.nationality
+    from ranked k join typlympics.athletes a on a.id = k.athlete_id
+    where k.place <= 10 order by k.ruleset_id, k.device, k.place, a.name`;
+  const last: Row[] = await sql`
+    select to_char(m.week_start, 'YYYY-MM-DD') as week_start, m.ruleset_id, m.device, m.rank, m.time_ms, a.name, a.nationality
+    from typlympics.weekly_medals m join typlympics.athletes a on a.id = m.athlete_id
+    where m.week_start = (select max(week_start) from typlympics.weekly_medals)
+    order by m.ruleset_id, m.device, m.rank, a.name`;
+  const boards: Record<string, Row[]> = {};
+  const phoneBoards: Record<string, Row[]> = {};
+  for (const r of rows) {
+    const target = r.device === 'phone' ? phoneBoards : boards;
+    const wpm = (RULESETS[String(r.ruleset_id).split('@')[0] as EventId]?.distance ?? 0) / 5 / (r.time_ms / 60000);
+    (target[r.ruleset_id] ??= []).push({ rank: Number(r.place), name: r.name, nationality: r.nationality, timeMs: r.time_ms, wpm: Math.round(wpm * 100) / 100 });
+  }
+  const c = clock[0] as Row;
+  return {
+    weekStart: c.week_start,
+    endsInMs: Math.max(0, Math.round(Number(c.ends_in_ms))),
+    boards,
+    phoneBoards,
+    lastWeek: last.length ? { weekStart: (last[0] as Row).week_start, medals: last.map(medalRow) } : null,
+  };
+}
+
+/** The hall of fame: every weekly medal, browsable by month, and the all-time medal table. */
+async function hall(body: Body): Promise<Row> {
+  await sql`select typlympics.close_weeks()`;
+  const monthRows: Row[] = await sql`
+    select distinct to_char(week_start, 'YYYY-MM') as month from typlympics.weekly_medals order by 1 desc`;
+  const months = monthRows.map((m) => m.month as string);
+  const asked = typeof body['month'] === 'string' && /^[0-9]{4}-[0-9]{2}$/.test(body['month']) ? body['month'] : null;
+  const month = asked ?? months[0] ?? null;
+  const medals: Row[] = month
+    ? await sql`
+        select to_char(m.week_start, 'YYYY-MM-DD') as week_start, m.ruleset_id, m.device, m.rank, m.time_ms, a.name, a.nationality
+        from typlympics.weekly_medals m join typlympics.athletes a on a.id = m.athlete_id
+        where to_char(m.week_start, 'YYYY-MM') = ${month}
+        order by m.week_start desc, m.ruleset_id, m.device, m.rank, a.name`
+    : [];
+  const table: Row[] = await sql`
+    select a.name, a.nationality,
+           count(*) filter (where m.rank = 1)::int as gold,
+           count(*) filter (where m.rank = 2)::int as silver,
+           count(*) filter (where m.rank = 3)::int as bronze
+    from typlympics.weekly_medals m join typlympics.athletes a on a.id = m.athlete_id
+    group by a.id order by gold desc, silver desc, bronze desc, a.name limit 10`;
+  return { months, month, medals: medals.map(medalRow), medalTable: table };
+}
+
+/** The signed-in athlete's own medals, for the career page. */
+async function myMedals(body: Body): Promise<Row> {
+  const me = await auth(body);
+  await sql`select typlympics.close_weeks()`;
+  const medals: Row[] = await sql`
+    select to_char(m.week_start, 'YYYY-MM-DD') as week_start, m.ruleset_id, m.device, m.rank, m.time_ms, a.name, a.nationality
+    from typlympics.weekly_medals m join typlympics.athletes a on a.id = m.athlete_id
+    where m.athlete_id = ${me.id} order by m.week_start desc, m.rank limit 60`;
+  const count = (rank: number): number => medals.filter((m) => m.rank === rank).length;
+  return { gold: count(1), silver: count(2), bronze: count(3), medals: medals.map(medalRow) };
+}
+
 // ------------------------------------------------------------ entry point
 
-const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, tick, submit, results, records };
+const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, tick, submit, results, records, weekly, hall, myMedals };
 
 function reply(status: number, data: unknown): Response {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });

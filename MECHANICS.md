@@ -106,3 +106,24 @@ the distance. The rest is my implementation and open to change.
 | Did not finish | Leaving mid-race, or not finishing within the time limit |
 | Keyboard or phone | Each result is tagged; World Records ranks the two separately; both may race in one room (decided 2026-11-24) |
 | Online identity | Athlete name (unique), nationality and four-digit PIN; five wrong PINs lock the name for 15 minutes |
+
+## Weekly medals
+
+Decided by the creative director on 2026-11-24: each distance has its own
+leaderboard, the top three each week hold the medal spots, medals are
+announced at the end of the week and kept in an all-time record by month
+and year. The details are my implementation.
+
+| Rule | Value |
+| --- | --- |
+| Week | Monday 00:00 UTC to the following Monday |
+| What counts | Each athlete's best official online time that week, per distance |
+| Medals | Gold, silver and bronze to the three fastest; equal times share a medal |
+| Keyboard and phone | Separate standings and separate medals |
+| Held or unfinished results | Do not count |
+| Awarding | When the week has ended, on the first request after it; stored permanently |
+| Announcement | Last week's medallists beside the weekly board; a title-screen notice to each winner |
+| Hall of fame | Every medal by month and year, and an all-time medal table |
+
+Open questions: should the week follow a different time zone than UTC, and
+should a distance need a minimum number of athletes before medals are given?
