@@ -5,6 +5,13 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (world record to beat)
+
+- Online races show the all-time best for the distance and device beside
+  the personal best, and the result announces a new world record.
+- The This Week board shows the world record to beat. All-time bests and
+  Most Race Wins are permanent; only the weekly standings reset.
+
 ### Added (device icons)
 
 - A pixel monitor or phone icon beside athlete names in the race room, on

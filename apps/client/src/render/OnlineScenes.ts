@@ -13,6 +13,7 @@ import {
   monthLabel,
   online,
   weekLabel,
+  worldRecord,
   type BoardRow,
   type Hall,
   type Records,
@@ -578,7 +579,10 @@ export class RecordsScene extends Phaser.Scene {
       this.clear();
       this.status.setText('LOADING . . .').setVisible(true);
       try {
-        if (view === 'week') this.week = await online.weekly();
+        if (view === 'week') {
+          // The all-time boards come along too, for the world record to beat.
+          [this.week, this.allTime] = await Promise.all([online.weekly(), this.allTime ?? online.records().catch(() => null)]);
+        }
         else if (view === 'alltime') this.allTime = await online.records();
         else this.hallData = await online.hall();
       } catch (e) {
@@ -686,6 +690,16 @@ export class RecordsScene extends Phaser.Scene {
         mono(13, COLORS.ice, { lineSpacing: 6 }),
       ),
     );
+    // Weekly boards start fresh each Monday; the world record never does.
+    const wr = worldRecord(this.allTime, rulesetId, device);
+    this.put(this.add.text(586, 440, 'WORLD RECORD TO BEAT', mono(13, COLORS.gold)));
+    if (wr) {
+      this.put(addFlag(this, 586, 470, wr.nationality, 1.5));
+      this.put(this.add.text(622, 461, wr.name, mono(15, COLORS.white)));
+      this.put(this.add.text(914, 461, formatTime(wr.timeMs), mono(15, COLORS.gold)).setOrigin(1, 0));
+    } else {
+      this.put(this.add.text(586, 461, 'NONE YET. SET THE FIRST.', mono(13, COLORS.dim)));
+    }
   }
 
   private drawAllTime(data: Records): void {

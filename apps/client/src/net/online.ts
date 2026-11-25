@@ -83,6 +83,12 @@ export interface Records {
   mostWins: Array<{ name: string; nationality: string; wins: number }>;
 }
 
+/** The all-time fastest at a distance on a device: the world record to beat. */
+export function worldRecord(records: Records | null, rulesetId: string, device: 'keyboard' | 'phone'): BoardRow | null {
+  if (!records) return null;
+  return (device === 'phone' ? records.phoneBoards : records.boards)[rulesetId]?.[0] ?? null;
+}
+
 export interface Medal {
   /** Monday the week began, as YYYY-MM-DD (UTC). */
   weekStart: string;
