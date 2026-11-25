@@ -5,6 +5,15 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (device icons)
+
+- A pixel monitor or phone icon beside athlete names in the race room, on
+  opponent name tags, in online finish standings, on the World Records
+  boards and in the Hall of Fame.
+- Room members carry a `device` (migration 0005); clients report their
+  likely device when hosting, joining and checking in. Result icons use the
+  device the server recorded with the race.
+
 ### Fixed (touch)
 
 - Touch mode now turns on for any device with a touch screen, not only

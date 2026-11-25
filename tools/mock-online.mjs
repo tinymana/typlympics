@@ -36,7 +36,7 @@ export function createMockServer() {
       event: room.event,
       state: room.state,
       maxPlayers: 4,
-      members: room.members.map((m) => ({ id: m.athlete.id, name: m.athlete.name, nationality: m.athlete.nationality, lane: m.lane })),
+      members: room.members.map((m) => ({ id: m.athlete.id, name: m.athlete.name, nationality: m.athlete.nationality, lane: m.lane, device: m.device ?? 'keyboard' })),
       race,
     };
   }
@@ -64,7 +64,7 @@ export function createMockServer() {
       }
       case 'host': {
         const pin = String(10000 + rooms.size * 7 + 4321).slice(0, 5);
-        const room = { pin, hostId: me.id, event: body.event, state: 'lobby', members: [{ athlete: me, lane: 0 }], race: null };
+        const room = { pin, hostId: me.id, event: body.event, state: 'lobby', members: [{ athlete: me, lane: 0, device: body.device === 'phone' ? 'phone' : 'keyboard' }], race: null };
         rooms.set(pin, room);
         return ok({ room: roomState(room), you: me.id });
       }
@@ -74,7 +74,7 @@ export function createMockServer() {
         if (!room.members.some((m) => m.athlete.id === me.id)) {
           if (room.members.length >= 4) return fail(400, 'full', 'That room is full (4 athletes).');
           const lane = [0, 1, 2, 3].find((l) => !room.members.some((m) => m.lane === l));
-          room.members.push({ athlete: me, lane });
+          room.members.push({ athlete: me, lane, device: body.device === 'phone' ? 'phone' : 'keyboard' });
         }
         return ok({ room: roomState(room), you: me.id });
       }
@@ -142,7 +142,7 @@ export function createMockServer() {
         let place = 0;
         return ok({
           done: entries.every((e) => e.status !== 'racing'),
-          entries: entries.map((e) => ({ id: e.athlete.id, name: e.athlete.name, nationality: e.athlete.nationality, lane: e.lane, status: e.status, place: e.status === 'finished' ? ++place : null, timeMs: e.timeMs, wpm: e.wpm })),
+          entries: entries.map((e) => ({ id: e.athlete.id, name: e.athlete.name, nationality: e.athlete.nationality, lane: e.lane, status: e.status, device: e.device ?? 'keyboard', place: e.status === 'finished' ? ++place : null, timeMs: e.timeMs, wpm: e.wpm })),
         });
       }
       case 'records': {
