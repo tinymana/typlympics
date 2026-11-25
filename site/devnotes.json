@@ -2,6 +2,17 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.8.1",
+      "date": "2026-11-24",
+      "title": "Cleaner result screen",
+      "items": [
+        {
+          "tag": "improved",
+          "text": "The rival's portrait no longer covers part of the result screen after a race. Portraits still show when you choose who to race."
+        }
+      ]
+    },
+    {
       "version": "0.8",
       "date": "2026-11-24",
       "title": "Flags",

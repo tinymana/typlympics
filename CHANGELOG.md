@@ -5,6 +5,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The rival portrait is no longer shown on the result panel (win or loss).
+  Portraits remain on the opponent select screen.
+
 ### Added (flags)
 
 - Pixel flags for all 70 nationalities and the guest, drawn from data in
