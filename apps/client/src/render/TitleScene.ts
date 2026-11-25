@@ -5,6 +5,7 @@ import menuRowsUrl from '../assets/menu_rows.png';
 import titleArtUrl from '../assets/title_art.webp';
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
+import { hasPendingInvite } from '../net/invite';
 import { activeProfile, browserStore, loadSave, verifyRecord } from '../storage/save';
 import { COLORS, FONT_MONO, GAME_W } from './layout';
 import { addFlag, flagWidth } from './flags';
@@ -61,6 +62,11 @@ export class TitleScene extends Phaser.Scene {
     const profile = activeProfile(save);
     if (!profile) {
       this.scene.start('login');
+      return;
+    }
+    // Arrived by an invite link: go straight to the room.
+    if (hasPendingInvite()) {
+      this.scene.start('compete');
       return;
     }
     this.sfx = new Sfx(save.settings.volume);

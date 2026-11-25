@@ -39,6 +39,8 @@ class MobileUi {
   private softCharsThisRace = 0;
   private raceTextShown = false;
   private refresh: (() => void) | null = null;
+  private actionButton: HTMLElement | null = null;
+  private actionHandler: (() => void) | null = null;
 
   /** Sets up touch controls on touch-first devices. Does nothing on a desktop. */
   init(onLayout: () => void): void {
@@ -123,8 +125,33 @@ class MobileUi {
       if (key === 'Enter') b.classList.add('wide');
       bar.append(b);
     }
+    // One extra button a screen can borrow, e.g. Invite in the race room.
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.id = 'touch-action';
+    action.className = 'touch-key wide accent';
+    action.hidden = true;
+    action.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.actionHandler?.();
+    });
+    bar.append(action);
+    this.actionButton = action;
     document.body.append(bar);
     return bar;
+  }
+
+  /** Shows or hides the borrowed action button. Pass null to remove it. */
+  setAction(label: string | null, handler: (() => void) | null = null): void {
+    this.actionHandler = label ? handler : null;
+    if (!this.actionButton) return;
+    this.actionButton.hidden = !label;
+    this.actionButton.textContent = label ?? '';
+  }
+
+  /** Puts the phone keyboard away, which brings the menu buttons back. */
+  closeKeyboard(): void {
+    this.input?.blur();
   }
 
   focusKeyboard(): void {

@@ -5,6 +5,16 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (invites)
+
+- Race room invites (`net/invite.ts`): on touch devices an Invite button
+  opens the system share sheet with a link to the room; elsewhere the I
+  key copies the invite text. The link is the game's address with
+  `?room=<PIN>` and nothing else.
+- Opening an invite link remembers the PIN, removes it from the address
+  bar, and joins the room once the athlete is signed in and online.
+- Touch bar can show one extra action button per screen.
+
 ### Added (phones)
 
 - Touch devices: a hidden text field raises the phone keyboard, and what

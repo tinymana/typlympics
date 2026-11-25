@@ -2,6 +2,25 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.10",
+      "date": "2026-11-24",
+      "title": "Text a friend an invite",
+      "items": [
+        {
+          "tag": "new",
+          "text": "In a race room on your phone, tap INVITE to open the share sheet and text a friend a link to the room."
+        },
+        {
+          "tag": "new",
+          "text": "On a computer, press I in the room to copy the invite, then paste it into any message."
+        },
+        {
+          "tag": "new",
+          "text": "Opening an invite link takes a signed-in athlete straight into the room. New players sign in first, then land in it."
+        }
+      ]
+    },
+    {
       "version": "0.9",
       "date": "2026-11-24",
       "title": "Play on your phone",
