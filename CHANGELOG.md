@@ -5,6 +5,12 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added (voice chat)
+
+- WebRTC voice chat for race rooms (mesh, up to four). `net/voice.ts` on the
+  client; a `voice` action on the server relays connection messages through
+  `typlympics.voice_signals` (migration 0007). STUN only, no relay yet.
+
 ### Changed (24 Nov requests)
 
 - Retired the 1500m: removed from `EVENT_IDS`; ruleset kept for old results.

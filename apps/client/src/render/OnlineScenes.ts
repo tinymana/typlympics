@@ -25,6 +25,7 @@ import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, 
 import { COLORS, GAME_W } from './layout';
 import { addDeviceIcon, addFlag, deviceKey, flagKey, flagWidth } from './flags';
 import { ensureTextures } from './textures';
+import { voice } from '../net/voice';
 import { markRaceRun, raceAlreadyRun } from './raceMemory';
 import { addBackdrop, addFooter, addHeading, addPanel, mono } from './ui';
 
@@ -303,7 +304,8 @@ export class LobbyScene extends Phaser.Scene {
   /** The host has pressed start and the server has not answered yet. */
   private starting = false;
   private leaving = false;
-  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }> = [];
+  private lanes: Array<{ name: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; flag: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; voice: Phaser.GameObjects.Text }> = [];
+  private voiceText!: Phaser.GameObjects.Text;
   private eventText!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private note!: Phaser.GameObjects.Text;
@@ -337,8 +339,18 @@ export class LobbyScene extends Phaser.Scene {
     this.add.text(225, 286, 'DISTANCE', mono(14, COLORS.dim)).setOrigin(0.5);
     this.eventText = this.add.text(225, 322, '', mono(30, COLORS.gold)).setOrigin(0.5);
     this.inviteText = this.add
-      .text(225, 380, mobile.enabled ? 'Tap INVITE to text a friend\na link to this room.' : 'Press I to copy an invite link,\nor tell friends the PIN.', mono(13, COLORS.ice, { align: 'center' }))
+      .text(225, 356, mobile.enabled ? 'Tap INVITE to text a friend\na link to this room.' : 'Press I to copy an invite link,\nor tell friends the PIN.', mono(13, COLORS.ice, { align: 'center' }))
       .setOrigin(0.5);
+
+    // Voice chat: V on a keyboard, or tap the line.
+    this.voiceText = this.add.text(225, 392, '', mono(14, COLORS.pink, { align: 'center' })).setOrigin(0.5).setPadding(16, 8, 16, 8).setInteractive({ useHandCursor: true });
+    this.voiceText.on('pointerdown', () => void this.toggleVoice());
+    // Voice belongs to one room; walking into another hangs up the old one.
+    if (voice.state !== 'off' && voice.state !== 'on') voice.leave();
+    if (voice.roomPin() !== null && voice.roomPin() !== this.pin) voice.leave();
+    const voiceOff = voice.onChange(() => {
+      if (this.scene.isActive()) this.refresh();
+    });
 
     addPanel(this, 410, 110, 490, 300, false);
     this.add.text(430, 122, 'LANES', mono(18, COLORS.gold));
@@ -351,15 +363,17 @@ export class LobbyScene extends Phaser.Scene {
         icon: addDeviceIcon(this, 486, y + 3, 'keyboard').setVisible(false),
         name: this.add.text(486, y + 3, '', mono(20, COLORS.white)).setOrigin(0, 0.5),
         tag: this.add.text(866, y + 3, '', mono(13, COLORS.gold)).setOrigin(1, 0.5),
+        voice: this.add.text(866, y + 3, '', mono(12, COLORS.green)).setOrigin(1, 0.5),
       });
     }
     this.status = this.add.text(GAME_W / 2, 440, 'CONNECTING . . .', mono(20, COLORS.pink)).setOrigin(0.5);
     this.note = this.add.text(GAME_W / 2, 474, '', mono(14, COLORS.red)).setOrigin(0.5);
-    addFooter(this, mobile.enabled ? 'INVITE  TEXT A FRIEND     ESC  LEAVE THE ROOM' : 'I  COPY INVITE LINK     ESC  LEAVE THE ROOM');
+    addFooter(this, mobile.enabled ? 'INVITE  TEXT A FRIEND     ESC  LEAVE THE ROOM' : 'I  COPY INVITE LINK     V  VOICE CHAT     ESC  LEAVE THE ROOM');
 
     const detach = attachKeyboard(window, {
       onChar: (ch) => {
         if (ch === 'i') void this.invite();
+        else if (ch === 'v') void this.toggleVoice();
       },
       onControl: (key) => void this.onControl(key),
     });
@@ -370,6 +384,7 @@ export class LobbyScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       detach();
       timer.remove();
+      voiceOff();
       mobile.setAction(null);
     });
     void this.poll();
@@ -377,6 +392,27 @@ export class LobbyScene extends Phaser.Scene {
 
   private token(): string {
     return this.ctx.profile.online?.token ?? '';
+  }
+
+  /** First press joins voice chat (the browser asks for the microphone); after that it mutes and unmutes. */
+  private async toggleVoice(): Promise<void> {
+    this.sfx.unlock();
+    if (voice.state === 'on') voice.toggleMic();
+    else if (voice.state !== 'asking' && this.you) await voice.join(this.token(), this.pin, this.you);
+    if (this.scene.isActive()) this.refresh();
+  }
+
+  private showVoice(): void {
+    const key = mobile.enabled ? 'TAP' : 'V';
+    const lines: Record<typeof voice.state, [string, string]> = {
+      off: [`${key}: JOIN VOICE CHAT`, COLORS.pink],
+      asking: ['ALLOW THE MICROPHONE . . .', COLORS.gold],
+      on: voice.micMuted ? [`MIC OFF   ${key}: UNMUTE`, COLORS.red] : [`MIC ON   ${key}: MUTE`, COLORS.green],
+      blocked: [`MICROPHONE BLOCKED\nALLOW IT, THEN ${key === 'V' ? 'PRESS V' : 'TAP HERE'}`, COLORS.red],
+      unsupported: ['VOICE CHAT IS NOT AVAILABLE\nIN THIS BROWSER', COLORS.dim],
+    };
+    const [text, color] = lines[voice.state];
+    this.voiceText.setText(text).setColor(color);
   }
 
   /** Shares or copies a link that brings a friend straight to this room. */
@@ -401,6 +437,7 @@ export class LobbyScene extends Phaser.Scene {
       if (!this.starting) this.apply(answer);
     } catch (e) {
       if (e instanceof OnlineError && ['not_member', 'no_room', 'signed_out'].includes(e.code)) {
+        voice.leave();
         if (this.scene.isActive()) this.scene.start('compete', { note: message(e) });
       } else if (this.scene.isActive()) {
         this.note.setText(message(e));
@@ -435,6 +472,7 @@ export class LobbyScene extends Phaser.Scene {
     const room = this.room;
     if (key === 'Escape') {
       this.leaving = true;
+      voice.leave();
       try {
         await online.leave(this.token(), this.pin);
       } catch {
@@ -465,6 +503,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private refresh(): void {
+    this.showVoice();
     const room = this.room;
     if (!room) return;
     const isHost = room.hostId === this.you;
@@ -482,6 +521,18 @@ export class LobbyScene extends Phaser.Scene {
       lane.icon.setVisible(!!m);
       if (m) lane.icon.setTexture(deviceKey(m.device)).setX(lane.name.x + lane.name.width + 10);
       lane.tag.setText(m ? [m.id === room.hostId ? 'HOST' : '', m.id === this.you ? 'YOU' : ''].filter(Boolean).join('  ') : '');
+      // Voice: your own microphone, or how the link to each other athlete is doing.
+      let talk: [string, string] = ['', COLORS.green];
+      if (m && voice.state === 'on') {
+        if (m.id === this.you) talk = voice.micMuted ? ['MIC OFF', COLORS.red] : ['MIC ON', COLORS.green];
+        else {
+          const link = voice.peerState(m.id);
+          if (link === 'connected') talk = ['VOICE', COLORS.green];
+          else if (link === 'connecting') talk = ['VOICE . . .', COLORS.dim];
+          else if (link === 'failed') talk = ['NO LINK', COLORS.red];
+        }
+      }
+      lane.voice.setText(talk[0]).setColor(talk[1]).setX(866 - (lane.tag.width > 0 ? lane.tag.width + 14 : 0));
     });
     if (room.state === 'racing') this.status.setText('RACE IN PROGRESS: YOU ARE IN THE NEXT ONE');
     else if (isHost) this.status.setText(room.members.length < 2 ? 'ENTER: START ALONE, OR WAIT FOR OTHERS' : `ENTER: START THE ${eventLabel(event).replace(' ', '')}`);

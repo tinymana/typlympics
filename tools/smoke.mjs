@@ -32,7 +32,7 @@ try {
   await sleep(1500);
   browser = await chromium.launch({
     executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome',
-    args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'],
+    args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
   });
   // The online API is answered by an in-memory stand-in, so the Compete
   // screens can be driven without a network.
@@ -359,6 +359,24 @@ try {
   await sceneOn(guestPage, 'lobby');
   await hostPage.waitForFunction(() => window.__typlympics.scene.getScene('lobby').room?.members.length === 2, null, { timeout: 8000 });
   await sleep(200);
+  // Voice chat: both join with a (fake) microphone and their browsers connect directly.
+  await hostPage.keyboard.press('v');
+  await guestPage.keyboard.press('v');
+  const linked = (p) =>
+    p.waitForFunction(() => {
+      const v = window.__typlympicsVoice;
+      const lobby = window.__typlympics.scene.getScene('lobby');
+      const other = lobby.room?.members.find((m) => m.id !== lobby.you);
+      return v.state === 'on' && other && v.peerState(other.id) === 'connected';
+    }, null, { timeout: 20000 }).then(() => true, () => false);
+  const [linkA, linkB] = await Promise.all([linked(hostPage), linked(guestPage)]);
+  check('voice chat connects the two athletes directly', linkA && linkB, `${linkA} / ${linkB}`);
+  const hearing = await guestPage.evaluate(() => [...document.querySelectorAll('audio')].some((a) => a.srcObject && a.srcObject.getAudioTracks().length > 0));
+  check('the guest is receiving the host\'s audio', hearing);
+  await sleep(1200);
+  await hostPage.keyboard.press('v');
+  check('V mutes your own microphone once in voice', await hostPage.evaluate(() => window.__typlympicsVoice.micMuted === true));
+  await hostPage.keyboard.press('v');
   await hostPage.screenshot({ path: join(outDir, '21-lobby-host.png') });
   check('the host sees both athletes in the room', true);
 
@@ -399,6 +417,11 @@ try {
   await hostPage.keyboard.press('Enter');
   await Promise.all([racePhase(hostPage, 'race'), racePhase(guestPage, 'race')]);
   const [againA, againB] = await Promise.all([hostPage, guestPage].map((p) => p.evaluate(() => window.__typlympics.scene.getScene('race').line.text)));
+  check('voice chat is still connected after a race and into the rematch', await hostPage.evaluate(() => {
+    const v = window.__typlympicsVoice;
+    const race = window.__typlympics.scene.getScene('race');
+    return race.online.members.filter((m) => m.id !== race.online.you).every((m) => v.peerState(m.id) === 'connected');
+  }));
   check('a rematch starts a new race for both athletes without visiting the room', mock.state.races.size === 2 && againA === againB);
   check('the rematch has different words from the first race', againA !== textA);
   await hostPage.screenshot({ path: join(outDir, '24b-rematch.png') });

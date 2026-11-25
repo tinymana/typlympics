@@ -543,7 +543,60 @@ async function myMedals(body: Body): Promise<Row> {
 
 // ------------------------------------------------------------ entry point
 
-const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, tick, submit, results, records, weekly, hall, myMedals };
+// ------------------------------------------------------------------ voice
+
+const VOICE_PRESENT_S = 8;
+const VOICE_SIGNALS_MAX = 40;
+const VOICE_SIGNAL_BYTES = 16000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Voice chat mailbox. Each player in voice calls this about once a second:
+ * it marks them as in voice, drops off connection messages for others in
+ * the room and picks up the ones addressed to them. No audio passes here.
+ */
+async function voice(body: Body): Promise<Row> {
+  const me = await auth(body);
+  const pin = str(body, 'pin');
+  const on = body['on'] !== false;
+  const seen: Row[] = await sql`
+    update typlympics.room_members set voice_at = case when ${on} then now() else null end
+    where pin = ${pin} and athlete_id = ${me.id} returning 1`;
+  if (seen.length === 0) throw new ApiError('not_member', 'You are not in that room.', 403);
+  if (!on) {
+    await sql`delete from typlympics.voice_signals where pin = ${pin} and (to_id = ${me.id} or from_id = ${me.id})`;
+    return { peers: [], signals: [] };
+  }
+
+  const send = Array.isArray(body['send']) ? (body['send'] as unknown[]).slice(0, VOICE_SIGNALS_MAX) : [];
+  for (const item of send) {
+    const to = (item as Row | null)?.to;
+    const data = (item as Row | null)?.data;
+    if (typeof to !== 'string' || !UUID.test(to) || to === me.id || typeof data !== 'object' || data === null) continue;
+    const text = JSON.stringify(data);
+    if (text.length > VOICE_SIGNAL_BYTES) continue;
+    // Only to someone who is in the same room.
+    await sql`
+      insert into typlympics.voice_signals (pin, from_id, to_id, data)
+      select ${pin}, ${me.id}, m.athlete_id, ${text}::jsonb
+      from typlympics.room_members m where m.pin = ${pin} and m.athlete_id = ${to}`;
+  }
+
+  const got: Row[] = await sql`
+    delete from typlympics.voice_signals where pin = ${pin} and to_id = ${me.id}
+    returning id, from_id, data`;
+  got.sort((a, b) => Number(a.id) - Number(b.id));
+  await sql`delete from typlympics.voice_signals where created_at < now() - interval '1 minute'`;
+  const peers: Row[] = await sql`
+    select athlete_id from typlympics.room_members
+    where pin = ${pin} and athlete_id <> ${me.id} and voice_at > now() - make_interval(secs => ${VOICE_PRESENT_S})`;
+  return {
+    peers: peers.map((p) => p.athlete_id),
+    signals: got.map((g) => ({ from: g.from_id, data: typeof g.data === 'string' ? JSON.parse(g.data) : g.data })),
+  };
+}
+
+const ACTIONS: Record<string, (body: Body) => Promise<Row>> = { enter, host, join, room, leave, start, tick, submit, results, records, weekly, hall, myMedals, voice };
 
 function reply(status: number, data: unknown): Response {
   return new Response(JSON.stringify(data), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
