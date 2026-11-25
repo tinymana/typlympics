@@ -391,6 +391,20 @@ try {
   await sceneOn(hostPage, 'lobby');
   await sleep(1300);
   check('after the race the host is back in the room, not thrown into the old race', await hostPage.evaluate(() => window.__typlympics.scene.isActive('lobby')));
+
+  // Invites: the host copies a link, and opening it lands a signed-in athlete in the room.
+  await hostPage.evaluate(() => {
+    window.__copied = null;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.__copied = t; } } });
+  });
+  await hostPage.keyboard.press('i');
+  await sleep(200);
+  const copied = await hostPage.evaluate(() => window.__copied);
+  check('pressing I in the room copies an invite with the room link', typeof copied === 'string' && copied.includes(`?room=${roomPin}`) && copied.includes(roomPin), copied);
+  await guestPage.goto(`http://localhost:${PORT}/?room=${roomPin}`);
+  await sceneOn(guestPage, 'lobby');
+  const invited = await guestPage.evaluate(() => ({ pin: window.__typlympics.scene.getScene('lobby').pin, address: window.location.search }));
+  check('opening an invite link joins the room and tidies the address', invited.pin === roomPin && invited.address === '', JSON.stringify(invited));
   await hostPage.keyboard.press('Escape');
   await sceneOn(hostPage, 'compete');
   await hostPage.keyboard.press('Escape');

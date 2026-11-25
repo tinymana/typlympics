@@ -3,6 +3,7 @@ import { EVENT_IDS, RULESETS, eventLabel, formatTime, type EventId } from '@typl
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { mobile } from '../input/mobile';
+import { hasPendingInvite, sendInvite, takePendingInvite } from '../net/invite';
 import { OnlineError, gunTimeFrom, online, type Records, type RoomAnswer, type RoomState } from '../net/online';
 import { GUEST_ID, PIN_LENGTH, activeProfile, browserStore, checkPin, loadSave, persistSave, type KeyValueStore, type Profile, type Save } from '../storage/save';
 import { COLORS, GAME_W } from './layout';
@@ -89,10 +90,30 @@ export class CompeteScene extends Phaser.Scene {
 
     if (ctx.profile.id === GUEST_ID) this.step = 'guest';
     else this.step = ctx.profile.online ? 'menu' : 'pin';
+    if (hasPendingInvite()) {
+      if (this.step === 'guest') {
+        takePendingInvite();
+        this.note.setText('SIGN IN AS AN ATHLETE TO JOIN THAT RACE');
+      } else if (this.step === 'pin') {
+        this.note.setText('YOU HAVE AN INVITE: ENTER YOUR PIN TO JOIN').setColor(COLORS.gold);
+      }
+    }
 
     const detach = attachKeyboard(window, { onChar: (ch) => this.onChar(ch), onControl: (key) => void this.onControl(key) });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, detach);
     this.refresh();
+    if (this.step === 'menu') void this.joinInvite();
+  }
+
+  /** Joins the room from an invite link, once the athlete is online. */
+  private async joinInvite(): Promise<void> {
+    const pin = takePendingInvite();
+    const token = this.ctx.profile.online?.token;
+    if (!pin || !token) return;
+    await this.run(async () => {
+      const answer = await online.join(token, pin);
+      this.scene.start('lobby', { pin: answer.room.pin });
+    }, 'menu');
   }
 
   private onChar(ch: string): void {
@@ -157,6 +178,8 @@ export class CompeteScene extends Phaser.Scene {
         persistSave(this.ctx.store, this.ctx.save);
         this.step = 'menu';
       }, 'pin');
+      // The step changes inside the task above, which the type checker cannot see.
+      if ((this.step as Step) === 'menu') await this.joinInvite();
       return;
     }
     const token = profile.online?.token;
@@ -268,6 +291,7 @@ export class LobbyScene extends Phaser.Scene {
   private eventText!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private note!: Phaser.GameObjects.Text;
+  private inviteText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('lobby');
@@ -296,7 +320,9 @@ export class LobbyScene extends Phaser.Scene {
     this.add.text(225, 210, this.pin.split('').join(' '), mono(54, COLORS.white)).setOrigin(0.5);
     this.add.text(225, 286, 'DISTANCE', mono(14, COLORS.dim)).setOrigin(0.5);
     this.eventText = this.add.text(225, 322, '', mono(30, COLORS.gold)).setOrigin(0.5);
-    this.add.text(225, 380, 'Others: COMPETE, JOIN A RACE,\nthen type this PIN.', mono(13, COLORS.ice, { align: 'center' })).setOrigin(0.5);
+    this.inviteText = this.add
+      .text(225, 380, mobile.enabled ? 'Tap INVITE to text a friend\na link to this room.' : 'Press I to copy an invite link,\nor tell friends the PIN.', mono(13, COLORS.ice, { align: 'center' }))
+      .setOrigin(0.5);
 
     addPanel(this, 410, 110, 490, 300, false);
     this.add.text(430, 122, 'LANES', mono(18, COLORS.gold));
@@ -312,19 +338,41 @@ export class LobbyScene extends Phaser.Scene {
     }
     this.status = this.add.text(GAME_W / 2, 440, 'CONNECTING . . .', mono(20, COLORS.pink)).setOrigin(0.5);
     this.note = this.add.text(GAME_W / 2, 474, '', mono(14, COLORS.red)).setOrigin(0.5);
-    addFooter(this, 'ESC  LEAVE THE ROOM');
+    addFooter(this, mobile.enabled ? 'INVITE  TEXT A FRIEND     ESC  LEAVE THE ROOM' : 'I  COPY INVITE LINK     ESC  LEAVE THE ROOM');
 
-    const detach = attachKeyboard(window, { onChar: () => undefined, onControl: (key) => void this.onControl(key) });
+    const detach = attachKeyboard(window, {
+      onChar: (ch) => {
+        if (ch === 'i') void this.invite();
+      },
+      onControl: (key) => void this.onControl(key),
+    });
     const timer = this.time.addEvent({ delay: POLL_MS, loop: true, callback: () => void this.poll() });
+    // On a phone the keyboard is put away so the Invite button is in reach.
+    mobile.closeKeyboard();
+    mobile.setAction('INVITE', () => void this.invite());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       detach();
       timer.remove();
+      mobile.setAction(null);
     });
     void this.poll();
   }
 
   private token(): string {
     return this.ctx.profile.online?.token ?? '';
+  }
+
+  /** Shares or copies a link that brings a friend straight to this room. */
+  private async invite(): Promise<void> {
+    const outcome = await sendInvite(this.pin, mobile.enabled);
+    if (!this.scene.isActive()) return;
+    const text = {
+      shared: 'INVITE SENT',
+      copied: 'INVITE COPIED: PASTE IT INTO A MESSAGE',
+      cancelled: '',
+      failed: `COULD NOT COPY. TELL THEM THE PIN: ${this.pin}`,
+    }[outcome];
+    if (text) this.inviteText.setText(text).setColor(outcome === 'failed' ? COLORS.red : COLORS.gold);
   }
 
   private async poll(): Promise<void> {
