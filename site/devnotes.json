@@ -2,6 +2,17 @@
   "_howto": "Newest first. Add an entry at the top each time you push an update; the website reads this file. tag: new | improved | fixed. Keep it in step with CHANGELOG.md, written for players instead of developers.",
   "notes": [
     {
+      "version": "0.15.1",
+      "date": "2026-11-27",
+      "title": "Invite button removed",
+      "items": [
+        {
+          "tag": "improved",
+          "text": "The invite and share button is gone from the race room; it was not working reliably. Share the room PIN instead."
+        }
+      ]
+    },
+    {
       "version": "0.15",
       "date": "2026-11-25",
       "title": "Voice chat",

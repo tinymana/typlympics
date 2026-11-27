@@ -5,6 +5,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- The invite/share control in the race room (button, I key, `sendInvite`).
+  Existing `?room=` links still open the room.
+
 ### Added (voice chat)
 
 - WebRTC voice chat for race rooms (mesh, up to four). `net/voice.ts` on the

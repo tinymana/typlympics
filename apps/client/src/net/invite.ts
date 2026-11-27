@@ -54,29 +54,3 @@ export function takePendingInvite(): string | null {
   return pin;
 }
 
-export type InviteOutcome = 'shared' | 'copied' | 'cancelled' | 'failed';
-
-/**
- * Sends the invite. On a phone this opens the share sheet, where Messages
- * and other apps are one tap away; elsewhere it copies the invite so it
- * can be pasted into any chat. Must be called from a key press or a tap.
- */
-export async function sendInvite(pin: string, preferShare: boolean): Promise<InviteOutcome> {
-  const link = inviteLink(pin, window.location.href);
-  const text = inviteMessage(pin, link);
-  if (preferShare && typeof navigator.share === 'function') {
-    try {
-      await navigator.share({ title: 'Typlympics', text: `Race me at Typlympics! Room PIN ${pin}`, url: link });
-      return 'shared';
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';
-      // Fall through to copying.
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    return 'copied';
-  } catch {
-    return 'failed';
-  }
-}
