@@ -3,7 +3,7 @@ import { EVENT_IDS, RULESETS, eventLabel, formatTime, type EventId } from '@typl
 import { Sfx } from '../audio/sfx';
 import { attachKeyboard, type ControlKey } from '../input/keyboard';
 import { mobile } from '../input/mobile';
-import { hasPendingInvite, sendInvite, takePendingInvite } from '../net/invite';
+import { hasPendingInvite, takePendingInvite } from '../net/invite';
 import {
   MEDAL_COLORS,
   MEDAL_NAMES,
@@ -309,7 +309,6 @@ export class LobbyScene extends Phaser.Scene {
   private eventText!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private note!: Phaser.GameObjects.Text;
-  private inviteText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('lobby');
@@ -338,10 +337,7 @@ export class LobbyScene extends Phaser.Scene {
     this.add.text(225, 210, this.pin.split('').join(' '), mono(54, COLORS.white)).setOrigin(0.5);
     this.add.text(225, 286, 'DISTANCE', mono(14, COLORS.dim)).setOrigin(0.5);
     this.eventText = this.add.text(225, 322, '', mono(30, COLORS.gold)).setOrigin(0.5);
-    this.inviteText = this.add
-      .text(225, 356, mobile.enabled ? 'Tap INVITE to text a friend\na link to this room.' : 'Press I to copy an invite link,\nor tell friends the PIN.', mono(13, COLORS.ice, { align: 'center' }))
-      .setOrigin(0.5);
-
+    this.add.text(225, 356, 'Tell your friends this PIN.\nThey choose JOIN A RACE.', mono(13, COLORS.ice, { align: 'center' })).setOrigin(0.5);
     // Voice chat: V on a keyboard, or tap the line.
     this.voiceText = this.add.text(225, 392, '', mono(14, COLORS.pink, { align: 'center' })).setOrigin(0.5).setPadding(16, 8, 16, 8).setInteractive({ useHandCursor: true });
     this.voiceText.on('pointerdown', () => void this.toggleVoice());
@@ -368,19 +364,17 @@ export class LobbyScene extends Phaser.Scene {
     }
     this.status = this.add.text(GAME_W / 2, 440, 'CONNECTING . . .', mono(20, COLORS.pink)).setOrigin(0.5);
     this.note = this.add.text(GAME_W / 2, 474, '', mono(14, COLORS.red)).setOrigin(0.5);
-    addFooter(this, mobile.enabled ? 'INVITE  TEXT A FRIEND     ESC  LEAVE THE ROOM' : 'I  COPY INVITE LINK     V  VOICE CHAT     ESC  LEAVE THE ROOM');
+    addFooter(this, mobile.enabled ? 'ESC  LEAVE THE ROOM' : 'V  VOICE CHAT     ESC  LEAVE THE ROOM');
 
     const detach = attachKeyboard(window, {
       onChar: (ch) => {
-        if (ch === 'i') void this.invite();
-        else if (ch === 'v') void this.toggleVoice();
+        if (ch === 'v') void this.toggleVoice();
       },
       onControl: (key) => void this.onControl(key),
     });
     const timer = this.time.addEvent({ delay: POLL_MS, loop: true, callback: () => void this.poll() });
-    // On a phone the keyboard is put away so the Invite button is in reach.
+    // On a phone the keyboard is put away so the whole room is in view.
     mobile.closeKeyboard();
-    mobile.setAction('INVITE', () => void this.invite());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       detach();
       timer.remove();
@@ -413,19 +407,6 @@ export class LobbyScene extends Phaser.Scene {
     };
     const [text, color] = lines[voice.state];
     this.voiceText.setText(text).setColor(color);
-  }
-
-  /** Shares or copies a link that brings a friend straight to this room. */
-  private async invite(): Promise<void> {
-    const outcome = await sendInvite(this.pin, mobile.enabled);
-    if (!this.scene.isActive()) return;
-    const text = {
-      shared: 'INVITE SENT',
-      copied: 'INVITE COPIED: PASTE IT INTO A MESSAGE',
-      cancelled: '',
-      failed: `COULD NOT COPY. TELL THEM THE PIN: ${this.pin}`,
-    }[outcome];
-    if (text) this.inviteText.setText(text).setColor(outcome === 'failed' ? COLORS.red : COLORS.gold);
   }
 
   private async poll(): Promise<void> {
